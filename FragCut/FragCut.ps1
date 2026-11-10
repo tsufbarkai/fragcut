@@ -1,11 +1,12 @@
 ﻿# FragCut - watch a recording, mark start/end while it plays, and cut slices with one key.
 # Usage: right-click one or more recordings > Send to > FragCut  (or run with no files to pick them).
 #
-# Keys:  Esc / Backspace  clear the marks
-#        Space play/pause      Left/Right -/+ 0.5 s (Shift = 5 s, Ctrl = 30 s)
+# Keys:  Space  play/pause          Left/Right  -/+ 0.5 s  (Shift = 5 s, Ctrl = 30 s)
 #        , / .  one frame back/forward (pauses)
-#        I or [  mark start    O or ]  mark end     C or Enter  cut the slice
-#        N  next video         J  join the slices cut in this window
+#        I  mark start   O  mark end   -> once both are marked, the marked part loops
+#        Q / W  start earlier / later   E / R  end earlier / later   (0.2 s, Shift = 1 s)
+#        Enter or C  cut the slice and keep watching     Esc  clear the marks
+#        P / N  previous / next recording   J  join the slices cut in this window
 #        Up/Down  volume
 # Slices are saved next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
@@ -26,7 +27,7 @@ $queue = [System.Collections.ArrayList]@($queue | Sort-Object { Split-Path $_ -L
 
 function Pick-Videos {
     $dlg = New-Object System.Windows.Forms.OpenFileDialog
-    $dlg.Title = 'Pick recordings to mark (Ctrl+click for several)'
+    $dlg.Title = 'Pick recordings (Ctrl+click for several)'
     $dlg.Filter = 'Videos|*.mp4;*.mkv;*.mov;*.avi;*.webm|All files|*.*'
     $dlg.Multiselect = $true
     $dlg.InitialDirectory = Get-StartFolder
@@ -40,104 +41,178 @@ if ($queue.Count -eq 0) { exit }
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FragCut" Width="1280" Height="860" MinWidth="800" MinHeight="560"
+        Title="FragCut" Width="1360" Height="880" MinWidth="900" MinHeight="580"
         Background="#1b1b1f" Foreground="#e8e8ea" WindowStartupLocation="CenterScreen" FontSize="14">
   <Window.Resources>
     <Style TargetType="Button">
       <Setter Property="Background" Value="#2d2d34"/><Setter Property="Foreground" Value="#e8e8ea"/>
-      <Setter Property="BorderBrush" Value="#44444c"/><Setter Property="Padding" Value="12,6"/>
-      <Setter Property="Margin" Value="0,0,8,0"/><Setter Property="Focusable" Value="False"/>
+      <Setter Property="BorderBrush" Value="#44444c"/><Setter Property="Padding" Value="10,6"/>
+      <Setter Property="Margin" Value="0,0,6,6"/><Setter Property="Focusable" Value="False"/>
     </Style>
     <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#e8e8ea"/><Setter Property="Focusable" Value="False"/></Style>
   </Window.Resources>
   <Grid Margin="12">
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="270"/></Grid.ColumnDefinitions>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="110"/>
     </Grid.RowDefinitions>
+
     <TextBlock x:Name="TitleText" Grid.Row="0" FontSize="15" Foreground="#9aa0ff" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"/>
     <Border Grid.Row="1" Background="Black">
       <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop" ScrubbingEnabled="True" Stretch="Uniform"/>
     </Border>
-    <Grid Grid.Row="2" Margin="0,10,0,0">
-      <Canvas x:Name="RangeCanvas" Height="8" VerticalAlignment="Top" Margin="5,0,5,0">
-        <Rectangle x:Name="RangeRect" Height="8" Fill="#f0a020" Width="0"/>
-      </Canvas>
-    </Grid>
-    <Slider x:Name="Seek" Grid.Row="3" Minimum="0" Maximum="1" IsMoveToPointEnabled="True" Focusable="False" Margin="0,2,0,0"/>
-    <DockPanel Grid.Row="4" Margin="0,8,0,0" LastChildFill="False">
+    <Canvas x:Name="RangeCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0">
+      <Rectangle x:Name="RangeRect" Height="8" Fill="#f0a020" Width="0"/>
+    </Canvas>
+    <Slider x:Name="Seek" Grid.Row="3" Minimum="0" Maximum="1" Focusable="False" Margin="0,2,0,0" Cursor="Hand"/>
+    <DockPanel Grid.Row="4" Margin="0,8,0,0" LastChildFill="True">
       <TextBlock x:Name="TimeText" DockPanel.Dock="Left" FontFamily="Consolas" FontSize="18" VerticalAlignment="Center" Width="230"/>
-      <TextBlock x:Name="MarkText" DockPanel.Dock="Left" FontFamily="Consolas" FontSize="16" Foreground="#f0a020" VerticalAlignment="Center"/>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock Text="Vol" VerticalAlignment="Center" Margin="0,0,6,0"/>
+        <TextBlock Text="Vol" VerticalAlignment="Center" Margin="12,0,6,0"/>
         <Slider x:Name="Vol" Width="110" Minimum="0" Maximum="1" Value="0.6" Focusable="False" VerticalAlignment="Center"/>
       </StackPanel>
+      <TextBlock x:Name="MarkText" FontFamily="Consolas" FontSize="15" Foreground="#f0a020" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
     </DockPanel>
-    <WrapPanel Grid.Row="5" Margin="0,10,0,10">
+    <WrapPanel Grid.Row="5" Margin="0,10,0,4">
       <Button x:Name="BtnPlay"  Content="Play/Pause [Space]"/>
       <Button x:Name="BtnStart" Content="Mark start [I]"/>
       <Button x:Name="BtnEnd"   Content="Mark end [O]"/>
-      <Button x:Name="BtnClear" Content="Clear marks [Esc]"/>
-      <Button x:Name="BtnCut"   Content="Cut slice [C]" Background="#3b5bdb"/>
-      <Button x:Name="BtnNext"  Content="Next video [N]"/>
-      <Button x:Name="BtnOpen"  Content="Open video..."/>
+      <Button x:Name="BtnClear" Content="Clear [Esc]"/>
+      <Button x:Name="BtnCut"   Content="Cut slice [Enter]" Background="#3b5bdb"/>
       <Button x:Name="BtnJoin"  Content="Join slices [J]" Background="#2f9e44"/>
-      <CheckBox x:Name="ChkMp3" Content="Also save MP3" VerticalAlignment="Center" Margin="8,0,0,0"/>
+      <CheckBox x:Name="ChkMp3" Content="Also save MP3" VerticalAlignment="Center" Margin="6,0,0,6"/>
     </WrapPanel>
     <ListBox x:Name="Slices" Grid.Row="6" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False" FontFamily="Consolas"/>
+
+    <DockPanel Grid.Column="2" Grid.Row="0" Grid.RowSpan="7">
+      <TextBlock DockPanel.Dock="Top" Text="Recordings" FontSize="15" Foreground="#9aa0ff" Margin="0,0,0,8"/>
+      <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+        <Button x:Name="BtnPrev" Content="Prev [P]"/>
+        <Button x:Name="BtnNext" Content="Next [N]"/>
+        <Button x:Name="BtnOpen" Content="Add..."/>
+      </StackPanel>
+      <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="#8a8a92" FontSize="12" Margin="0,10,0,0"
+                 Text="Marked part loops. Q/W = start earlier/later, E/R = end earlier/later (Shift = 1 s). Enter = cut and keep watching."/>
+      <ListBox x:Name="Videos" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False"/>
+    </DockPanel>
   </Grid>
 </Window>
 '@
 
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 $ui = @{}
-foreach ($n in 'TitleText','Player','RangeCanvas','RangeRect','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnNext','BtnOpen','BtnJoin','ChkMp3','Slices') { $ui[$n] = $win.FindName($n) }
+foreach ($n in 'TitleText','Player','RangeCanvas','RangeRect','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','ChkMp3','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
 
 $st = @{
-    Index = -1; Video = $null; Dur = 0.0; Playing = $false; Dragging = $false
+    Index = -1; Video = $null; Dur = 0.0; Playing = $false
+    Dragging = $false; DragWasPlaying = $false
     Start = $null; End = $null
+    LastSeek = 0.0; LastSeekAt = [datetime]::MinValue
     Jobs = New-Object System.Collections.ArrayList     # pending ffmpeg steps
     Running = $null                                    # current step
     Done = New-Object System.Collections.ArrayList     # finished slice mp4 files
     Enc = (Get-Encoder $ffmpeg)
+    SyncingList = $false
 }
 
 function Set-Status($i, $text) { $ui.Slices.Items[$i] = $text }
 function Set-Title { $win.Title = "FragCut $FragCutVersion   -   encoding on: $(Get-EncoderName $st.Enc)" }
+function Looping { ($null -ne $st.Start) -and ($null -ne $st.End) -and ($st.End -gt $st.Start) }
+
+# ---------- recordings list ----------
+function Refresh-Videos {
+    $st.SyncingList = $true
+    $ui.Videos.Items.Clear()
+    foreach ($v in $queue) { [void]$ui.Videos.Items.Add(([IO.Path]::GetFileNameWithoutExtension($v) -replace '\.DVR$', '')) }
+    if ($st.Index -ge 0) { $ui.Videos.SelectedIndex = $st.Index; $ui.Videos.ScrollIntoView($ui.Videos.SelectedItem) }
+    $st.SyncingList = $false
+}
 
 function Load-Video([int]$i) {
-    if ($i -ge $queue.Count) { return }
+    if ($i -lt 0 -or $i -ge $queue.Count) { return }
     $st.Index = $i; $st.Video = $queue[$i]; $st.Start = $null; $st.End = $null; $st.Dur = 0
-    $ui.TitleText.Text = ('[{0}/{1}]  {2}' -f ($i + 1), $queue.Count, (Split-Path $st.Video -Leaf))
     Save-LastFolder $st.Video
+    $ui.TitleText.Text = ('[{0}/{1}]  {2}' -f ($i + 1), $queue.Count, (Split-Path $st.Video -Leaf))
     $ui.Player.Source = New-Object Uri($st.Video)
     $ui.Player.Volume = $ui.Vol.Value
     $ui.Player.Play(); $st.Playing = $true
+    $st.LastSeekAt = [datetime]::MinValue
+    Refresh-Videos
+    Update-Marks
 }
 
+# ---------- playback ----------
 function Pos { $ui.Player.Position.TotalSeconds }
-function Seek-To([double]$s) {
-    if ($st.Dur -gt 0) { $s = [math]::Max(0, [math]::Min($s, $st.Dur)) } else { $s = [math]::Max(0, $s) }
-    $ui.Player.Position = [TimeSpan]::FromSeconds($s)
-    $ui.Seek.Value = $s
-}
-function Toggle-Play { if ($st.Playing) { $ui.Player.Pause() } else { $ui.Player.Play() }; $st.Playing = -not $st.Playing }
-function Step([double]$d) { if ($st.Playing) { $ui.Player.Pause(); $st.Playing = $false }; Seek-To ((Pos) + $d) }
 
+# Position to step from: right after a seek the player may still report the old position,
+# so repeated key presses build on the last target instead.
+function Base-Pos {
+    if (([datetime]::Now - $st.LastSeekAt).TotalMilliseconds -lt 450) { return $st.LastSeek }
+    return (Pos)
+}
+
+# Exact seek: while playing, the player snaps to keyframes, so pause, seek, then resume.
+function Seek-To([double]$s) {
+    if ($st.Dur -gt 0) { $s = [math]::Max(0.0, [math]::Min($s, $st.Dur - 0.02)) } else { $s = [math]::Max(0.0, $s) }
+    if ($st.Playing) { $ui.Player.Pause() }
+    $ui.Player.Position = [TimeSpan]::FromSeconds($s)
+    if ($st.Playing) { $ui.Player.Play() }
+    $ui.Seek.Value = $s
+    $st.LastSeek = $s; $st.LastSeekAt = [datetime]::Now
+}
+function Play { $ui.Player.Play(); $st.Playing = $true }
+function Pause-Video { $ui.Player.Pause(); $st.Playing = $false }
+function Toggle-Play { if ($st.Playing) { Pause-Video } else { Play } }
+function Step([double]$d) { if ($st.Playing) { Pause-Video }; Seek-To ((Base-Pos) + $d) }
+
+# ---------- marks ----------
 function Update-Marks {
-    $s = if ($null -ne $st.Start) { Short $st.Start } else { '--' }
-    $e = if ($null -ne $st.End)   { Short $st.End }   else { '--' }
-    $len = ''
-    if ($null -ne $st.Start -and $null -ne $st.End -and $st.End -gt $st.Start) { $len = '  ({0:N1} s)' -f ($st.End - $st.Start) }
-    $ui.MarkText.Text = "Start $s   End $e$len"
+    if (Looping) {
+        $ui.MarkText.Text = ('LOOP {0} -> {1}  ({2:N1} s)   Enter = cut   Q/W start  E/R end   Esc = cancel' -f (Short $st.Start), (Short $st.End), ($st.End - $st.Start))
+    } else {
+        $s = if ($null -ne $st.Start) { Short $st.Start } else { '--' }
+        $e = if ($null -ne $st.End)   { Short $st.End }   else { '--' }
+        $ui.MarkText.Text = "Start $s   End $e"
+    }
     $w = $ui.RangeCanvas.ActualWidth
     if ($st.Dur -gt 0 -and $w -gt 0 -and $null -ne $st.Start) {
         $a = $st.Start; $b = if ($null -ne $st.End -and $st.End -gt $a) { $st.End } else { [math]::Max((Pos), $a) }
         [Windows.Controls.Canvas]::SetLeft($ui.RangeRect, $w * $a / $st.Dur)
-        $ui.RangeRect.Width = [math]::Max(2, $w * ($b - $a) / $st.Dur)
+        $ui.RangeRect.Width = [math]::Max(2.0, $w * ($b - $a) / $st.Dur)
     } else { $ui.RangeRect.Width = 0 }
 }
 
+function Start-Loop { Seek-To $st.Start; Play; Update-Marks }
+
+function Mark-Start {
+    $st.Start = Base-Pos
+    if ($null -ne $st.End -and $st.End -le $st.Start + 0.05) { $st.End = $null }
+    if (Looping) { Start-Loop } else { Update-Marks }
+}
+function Mark-End {
+    $p = Base-Pos
+    if ($null -ne $st.Start -and $p -le $st.Start + 0.05) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'End must be after start'; return }
+    $st.End = $p
+    if (Looping) { Start-Loop } else { Update-Marks }
+}
+function Clear-Marks { $st.Start = $null; $st.End = $null; Update-Marks }
+
+# Q/W/E/R: move the start or end of the marked part, then replay that edge.
+function Nudge([string]$which, [double]$d) {
+    if (-not (Looping)) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'Mark a start [I] and an end [O] first'; return }
+    if ($which -eq 'start') {
+        $st.Start = [math]::Max(0.0, [math]::Min($st.Start + $d, $st.End - 0.1))
+        Seek-To $st.Start
+    } else {
+        $max = if ($st.Dur -gt 0) { $st.Dur } else { $st.End + 3600 }
+        $st.End = [math]::Min($max, [math]::Max($st.End + $d, $st.Start + 0.1))
+        Seek-To ([math]::Max($st.Start, $st.End - 1.5))      # hear the last 1.5 s
+    }
+    Play; Update-Marks
+}
+
+# ---------- cutting ----------
 function Start-Next-Job {
     if ($st.Running -or $st.Jobs.Count -eq 0) { return }
     $job = $st.Jobs[0]; $st.Jobs.RemoveAt(0)
@@ -165,8 +240,7 @@ function Check-Jobs {
             Set-Status $job.Row ("{0}  FAILED (empty - is the part inside the video?)" -f $job.Label)
         } elseif ($code -eq 0) {
             [void]$st.Done.Add($job.Mp4)
-            $mb = (Get-Item -LiteralPath $job.Mp4).Length / 1MB
-            Set-Status $job.Row ("{0}  saved  {1}  ({2:N1} MB)" -f $job.Label, (Split-Path $job.Mp4 -Leaf), $mb)
+            Set-Status $job.Row ("{0}  saved  {1}  ({2:N1} MB)" -f $job.Label, (Split-Path $job.Mp4 -Leaf), ($size / 1MB))
         } else { Set-Status $job.Row ("{0}  FAILED (ffmpeg exit {1})" -f $job.Label, $code) }
     } else {
         $txt = ([string]$ui.Slices.Items[$job.Row]) -replace '   \+ MP3\.\.\.$', ''
@@ -180,15 +254,15 @@ function Cut-Slice {
     if (-not $st.Video) { return }
     $a = $st.Start; $b = $st.End
     if ($null -eq $a) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'Mark a start first [I]'; return }
-    if ($null -eq $b -or $b -le $a) { $b = Pos }                 # no end marked: cut up to where the video is now
+    $looping = Looping
+    if (-not $looping) { $b = Base-Pos }                        # no end marked: cut up to where the video is now
     if ($st.Dur -gt 0) {
         if ($a -ge $st.Dur) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'Start is past the end of the video'; return }
         $b = [math]::Min($b, $st.Dur)
     }
     if ($b -le $a) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'End must be after start'; return }
     $paths = Get-SlicePaths $st.Video $a $b
-    # reserve the name now so two quick cuts never get the same file name
-    New-Item -ItemType File -Path $paths.Mp4 -Force | Out-Null
+    New-Item -ItemType File -Path $paths.Mp4 -Force | Out-Null   # reserve the name so quick cuts never collide
     $label = '{0,2}. {1} -> {2}' -f ($ui.Slices.Items.Count + 1), (Short $a), (Short $b)
     $row = $ui.Slices.Items.Add("$label  queued")
     $ui.Slices.ScrollIntoView($ui.Slices.Items[$row])
@@ -196,6 +270,7 @@ function Cut-Slice {
     $j1 = $base.Clone(); $j1.Kind = 'mp4'; [void]$st.Jobs.Add($j1)
     if ($ui.ChkMp3.IsChecked) { $j2 = $base.Clone(); $j2.Kind = 'mp3'; [void]$st.Jobs.Add($j2) }
     $st.Start = $null; $st.End = $null
+    if ($looping) { Seek-To $b; Play }                          # keep watching from the end of the slice
     Update-Marks
     Start-Next-Job
 }
@@ -207,68 +282,119 @@ function Join-Slices {
     Start-Process powershell.exe -ArgumentList $argline
 }
 
-function Next-Video {
-    if ($st.Index + 1 -lt $queue.Count) { Load-Video ($st.Index + 1) }
-    else { $ui.MarkText.Text = 'That was the last video - use "Open video..." to add more' }
-}
+function Next-Video { if ($st.Index + 1 -lt $queue.Count) { Load-Video ($st.Index + 1) } else { $ui.MarkText.Text = 'That was the last recording - use "Add..." for more' } }
+function Prev-Video { if ($st.Index -gt 0) { Load-Video ($st.Index - 1) } else { $ui.MarkText.Text = 'This is the first recording' } }
 
-# --- events ---
+# ---------- timeline: click to jump, drag to scrub (paused + muted while dragging) ----------
+function Value-At([double]$x) {
+    # x = position on the timeline track; the thumb's centre covers [half thumb .. width - half thumb]
+    $track = $ui.Seek.Template.FindName('PART_Track', $ui.Seek)
+    $w = $ui.Seek.ActualWidth; $tw = 0.0
+    if ($track) { $w = $track.ActualWidth; if ($track.Thumb) { $tw = $track.Thumb.ActualWidth } }
+    $frac = ($x - $tw / 2) / [math]::Max(1.0, $w - $tw)
+    return $ui.Seek.Maximum * [math]::Max(0.0, [math]::Min(1.0, $frac))
+}
+function Track-Value($e) {
+    $track = $ui.Seek.Template.FindName('PART_Track', $ui.Seek)
+    $rel = if ($track) { $track } else { $ui.Seek }
+    return (Value-At ($e.GetPosition($rel).X))
+}
+$ui.Seek.Add_PreviewMouseLeftButtonDown({
+    param($s, $e)
+    $e.Handled = $true
+    $st.Dragging = $true; $st.DragWasPlaying = $st.Playing
+    if ($st.Playing) { Pause-Video }
+    $ui.Player.IsMuted = $true
+    [void]$ui.Seek.CaptureMouse()
+    Seek-To (Track-Value $e)
+})
+$ui.Seek.Add_PreviewMouseMove({
+    param($s, $e)
+    if (-not $st.Dragging) { return }
+    $e.Handled = $true
+    $v = Track-Value $e
+    $ui.Seek.Value = $v
+    $ui.Player.Position = [TimeSpan]::FromSeconds($v)
+    $st.LastSeek = $v; $st.LastSeekAt = [datetime]::Now
+})
+function End-Drag {
+    if (-not $st.Dragging) { return }
+    $st.Dragging = $false
+    $ui.Player.IsMuted = $false
+    if ($st.DragWasPlaying) { Play }
+}
+$ui.Seek.Add_PreviewMouseLeftButtonUp({ param($s, $e) $e.Handled = $true; if ($st.Dragging) { Seek-To (Track-Value $e) }; $ui.Seek.ReleaseMouseCapture(); End-Drag })
+$ui.Seek.Add_LostMouseCapture({ End-Drag })
+
+# ---------- events ----------
 $ui.Player.Add_MediaOpened({
-    if ($ui.Player.NaturalDuration.HasTimeSpan) { $st.Dur = $ui.Player.NaturalDuration.TimeSpan.TotalSeconds }
-    else { $st.Dur = Get-Duration $ffprobe $st.Video }
+    # the player rounds the length down to whole seconds; ffprobe gives the exact length
+    $d = 0.0; try { $d = Get-Duration $ffprobe $st.Video } catch {}
+    if ($ui.Player.NaturalDuration.HasTimeSpan) { $d = [math]::Max($d, $ui.Player.NaturalDuration.TimeSpan.TotalSeconds) }
+    $st.Dur = $d
     $ui.Seek.Maximum = [math]::Max(0.1, $st.Dur)
     Update-Marks
 })
-$ui.Player.Add_MediaEnded({ $ui.Player.Pause(); $st.Playing = $false })
+$ui.Player.Add_MediaEnded({ if (Looping) { Seek-To $st.Start; Play } else { Pause-Video } })
 $ui.Player.Add_MediaFailed({ param($s, $e) $ui.MarkText.Text = "Can't play this file: $($e.ErrorException.Message)" })
-
-$ui.Seek.Add_PreviewMouseDown({ $st.Dragging = $true })
-$ui.Seek.Add_PreviewMouseUp({ Seek-To $ui.Seek.Value; $st.Dragging = $false })
-$ui.Seek.Add_ValueChanged({ if ($st.Dragging) { $ui.Player.Position = [TimeSpan]::FromSeconds($ui.Seek.Value) } })
 $ui.Vol.Add_ValueChanged({ $ui.Player.Volume = $ui.Vol.Value })
 
 $ui.BtnPlay.Add_Click({ Toggle-Play })
-$ui.BtnStart.Add_Click({ $st.Start = Pos; if ($null -ne $st.End -and $st.End -le $st.Start) { $st.End = $null }; Update-Marks })
-$ui.BtnEnd.Add_Click({ $st.End = Pos; Update-Marks })
+$ui.BtnStart.Add_Click({ Mark-Start })
+$ui.BtnEnd.Add_Click({ Mark-End })
+$ui.BtnClear.Add_Click({ Clear-Marks })
 $ui.BtnCut.Add_Click({ Cut-Slice })
-$ui.BtnClear.Add_Click({ $st.Start = $null; $st.End = $null; Update-Marks })
-$ui.BtnNext.Add_Click({ Next-Video })
 $ui.BtnJoin.Add_Click({ Join-Slices })
+$ui.BtnNext.Add_Click({ Next-Video })
+$ui.BtnPrev.Add_Click({ Prev-Video })
 $ui.BtnOpen.Add_Click({
     $new = Pick-Videos
     if ($new.Count) { $first = $queue.Count; foreach ($f in $new) { [void]$queue.Add($f) }; Load-Video $first }
 })
+$ui.Videos.Add_SelectionChanged({
+    if ($st.SyncingList) { return }
+    $i = $ui.Videos.SelectedIndex
+    if ($i -ge 0 -and $i -ne $st.Index) { Load-Video $i }
+})
 
 $win.Add_PreviewKeyDown({
     param($s, $e)
-    $shift = [Windows.Input.Keyboard]::Modifiers -band [Windows.Input.ModifierKeys]::Shift
-    $ctrl  = [Windows.Input.Keyboard]::Modifiers -band [Windows.Input.ModifierKeys]::Control
+    $shift = [bool]([Windows.Input.Keyboard]::Modifiers -band [Windows.Input.ModifierKeys]::Shift)
+    $ctrl  = [bool]([Windows.Input.Keyboard]::Modifiers -band [Windows.Input.ModifierKeys]::Control)
     $jump  = if ($ctrl) { 30 } elseif ($shift) { 5 } else { 0.5 }
+    $nudge = if ($shift) { 1.0 } else { 0.2 }
     $h = $true
     switch ($e.Key.ToString()) {
         'Space'      { Toggle-Play }
-        'Left'       { Seek-To ((Pos) - $jump) }
-        'Right'      { Seek-To ((Pos) + $jump) }
+        'Left'       { Seek-To ((Base-Pos) - $jump) }
+        'Right'      { Seek-To ((Base-Pos) + $jump) }
         'OemComma'   { Step (-1.0 / 60) }
         'OemPeriod'  { Step (1.0 / 60) }
-        { $_ -in 'I','OemOpenBrackets','Oem4' }  { $ui.BtnStart.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Primitives.ButtonBase]::ClickEvent))) }
-        { $_ -in 'O','OemCloseBrackets','Oem6' }             { $ui.BtnEnd.RaiseEvent((New-Object Windows.RoutedEventArgs([Windows.Controls.Primitives.ButtonBase]::ClickEvent))) }
-        { $_ -in 'C','Return' }           { Cut-Slice }
+        { $_ -in 'I','OemOpenBrackets','Oem4' }  { Mark-Start }
+        { $_ -in 'O','OemCloseBrackets','Oem6' } { Mark-End }
+        'Q'          { Nudge 'start' (-$nudge) }
+        'W'          { Nudge 'start' $nudge }
+        'E'          { Nudge 'end' (-$nudge) }
+        'R'          { Nudge 'end' $nudge }
+        { $_ -in 'C','Return' } { Cut-Slice }
         'N'          { Next-Video }
+        'P'          { Prev-Video }
         'J'          { Join-Slices }
-        'Up'         { $ui.Vol.Value = [math]::Min(1, $ui.Vol.Value + 0.05) }
-        'Down'       { $ui.Vol.Value = [math]::Max(0, $ui.Vol.Value - 0.05) }
-        { $_ -in 'Escape','Back','Delete' } { $st.Start = $null; $st.End = $null; Update-Marks }
+        'Up'         { $ui.Vol.Value = [math]::Min(1.0, $ui.Vol.Value + 0.05) }
+        'Down'       { $ui.Vol.Value = [math]::Max(0.0, $ui.Vol.Value - 0.05) }
+        { $_ -in 'Escape','Back','Delete' } { Clear-Marks }
         default      { $h = $false }
     }
     $e.Handled = $h
 })
 
 $timer = New-Object Windows.Threading.DispatcherTimer
-$timer.Interval = [TimeSpan]::FromMilliseconds(50)
+$timer.Interval = [TimeSpan]::FromMilliseconds(40)
 $timer.Add_Tick({
     try {
         $p = Pos
+        # loop the marked part
+        if ((Looping) -and $st.Playing -and -not $st.Dragging -and $p -ge $st.End -and ([datetime]::Now - $st.LastSeekAt).TotalMilliseconds -gt 150) { Seek-To $st.Start; $p = $st.Start }
         if (-not $st.Dragging) { $ui.Seek.Value = $p }
         $ui.TimeText.Text = '{0} / {1}' -f (Short $p), (Short $st.Dur)
         if ($null -ne $st.Start -and $null -eq $st.End) { Update-Marks }
@@ -288,18 +414,30 @@ $win.Add_Closing({
 })
 
 if ($SelfTest) {
-    # automated check: mark 1.0-3.5 s, cut it (with MP3), wait for it to save, then close
+    # automated check: seeking, marks, loop, nudge, cut (with MP3); prints results, then closes
     $script:tstep = 0
+    $script:tlog = New-Object System.Collections.ArrayList
     $tt = New-Object Windows.Threading.DispatcherTimer
-    $tt.Interval = [TimeSpan]::FromMilliseconds(500)
+    $tt.Interval = [TimeSpan]::FromMilliseconds(250)
     $tt.Add_Tick({
         $script:tstep++
-        if ($script:tstep -eq 4) { $ui.ChkMp3.IsChecked = $true; Seek-To 1.0; $st.Start = 1.0; $st.End = 3.5; Update-Marks; Cut-Slice }
-        if ($script:tstep -gt 4 -and -not $st.Running -and $st.Jobs.Count -eq 0) {
-            Write-Host "SELFTEST dur=$($st.Dur) pos=$(Pos) done=$($st.Done -join '|') rows=$($ui.Slices.Items -join ' || ')"
+        $k = $script:tstep
+        function L($m) { [void]$script:tlog.Add($m) }
+        if ($k -ge 6 -and $k -le 30) { L ("t{0} pos={1:N2} playing={2}" -f $k, (Pos), $st.Playing) }
+        switch ($k) {
+            6  { Seek-To 4.0; L "  >> seek 4.0"; $tr = $ui.Seek.Template.FindName('PART_Track', $ui.Seek); L ("  >> timeline: left={0:N2} middle={1:N2} right={2:N2} (length {3:N2})" -f (Value-At 0), (Value-At ($tr.ActualWidth / 2)), (Value-At $tr.ActualWidth), $st.Dur) }
+            10 { $bp = Base-Pos; $pp = Pos; $age = ([datetime]::Now - $st.LastSeekAt).TotalMilliseconds; Seek-To ($bp - 0.5); L ("  >> back 0.5: base={0:N2} -> target {1:N2}  (dur={2:N2})" -f $bp, $st.LastSeek, $st.Dur) }
+            14 { Seek-To ((Base-Pos) - 0.5); Seek-To ((Base-Pos) - 0.5); L ("  >> back 0.5 twice fast -> target {0:N2}" -f $st.LastSeek) }
+            18 { Seek-To 1.0; Mark-Start; Seek-To 2.5; Mark-End; L ("  >> marked 1.0-2.5 looping={0}" -f (Looping)) }
+            28 { Nudge 'end' 0.2; Nudge 'start' (-0.2); L ("  >> nudged: {0:N1}-{1:N1}" -f $st.Start, $st.End) }
+            31 { $ui.ChkMp3.IsChecked = $true; Cut-Slice; L ("  >> cut, target after cut={0:N2}" -f $st.LastSeek) }
+            33 { L ("t33 pos={0:N2} playing={1}" -f (Pos), $st.Playing) }
+        }
+        if ($k -gt 33 -and -not $st.Running -and $st.Jobs.Count -eq 0) {
+            Write-Host ("SELFTEST`n  " + ($script:tlog -join "`n  ") + "`n  slices: " + ($ui.Slices.Items -join ' || '))
             $tt.Stop(); $win.Close()
         }
-        if ($script:tstep -gt 120) { Write-Host 'SELFTEST timeout'; $tt.Stop(); $win.Close() }
+        if ($k -gt 160) { Write-Host 'SELFTEST timeout'; $tt.Stop(); $win.Close() }
     })
     $win.Add_ContentRendered({ $tt.Start() })
 }

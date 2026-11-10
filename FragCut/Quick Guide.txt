@@ -19,20 +19,24 @@ INSTALL
 FRAGCUT - watch, mark, cut
 --------------------------
 Select one or more recordings > right-click > Send to > FragCut.
-The video plays. Mark the part you want and press C. Slices save in the background
-(next to the recording) while you keep watching.
+The video plays. The flow:  I (start) -> O (end) -> the marked part loops -> fine-tune -> Enter.
+Slices save in the background (next to the recording) while you keep watching.
 
   Space ............ play / pause
   Left / Right ..... back / forward 0.5 s   (Shift = 5 s, Ctrl = 30 s)
   , / . ............ one frame back / forward
   I ................ mark start
-  O ................ mark end
-  C or Enter ....... cut the slice   (no end marked = cut up to where the video is now)
+  O ................ mark end  -> the marked part loops
+  Q / W ............ start earlier / later   (0.2 s, Shift = 1 s)
+  E / R ............ end earlier / later     (0.2 s, Shift = 1 s)
+  Enter or C ....... cut the slice and keep watching   (only a start marked = cut up to now)
   Esc .............. clear the marks
-  N ................ next recording   (when you opened several)
+  P / N ............ previous / next recording
   J ................ join the slices you cut into one video
   Up / Down ........ volume
 
+  Click anywhere on the timeline to jump there, or drag it (pauses + mutes while dragging).
+  Opened several recordings? They're listed on the right - click one to switch.
   "Also save MP3" = also save the sound of each slice as an MP3.
   The orange bar above the timeline shows the marked part.
   Slices are named like:  <recording> - clip 01m38-01m43.mp4

@@ -2,7 +2,7 @@
 
 **Cut the best moments out of your game recordings and stitch them into one video — right from the right-click menu.**
 
-Right-click a recording → **Send to → FragCut**. Watch it, press **I** at the start of the play, **O** at the end, **C** to cut. Do it for a few clips, press **J**, and you've got a montage. No timeline, no effects, no account, nothing running in the background.
+Right-click a recording → **Send to → FragCut**. Watch it, press **I** at the start of the play and **O** at the end — the marked part loops so you can fine-tune it — then **Enter** to cut and keep watching. Do it for a few clips, press **J**, and you've got a montage. No timeline, no effects, no account, nothing running in the background.
 
 - **Mark while watching** — a small player with keyboard controls. Slices save in the background while you keep watching.
 - **One-key join** — stitch slices together in the order you choose. Slices from FragCut join **instantly with no quality loss**.
@@ -33,12 +33,18 @@ No admin rights needed. Installs to `%LOCALAPPDATA%\FragCut`.
 | `←` / `→` | back / forward 0.5 s (`Shift` = 5 s, `Ctrl` = 30 s) |
 | `,` / `.` | one frame back / forward |
 | `I` | mark start |
-| `O` | mark end |
-| `C` or `Enter` | cut the slice (no end marked = cut up to the current position) |
+| `O` | mark end — the marked part now **loops** |
+| `Q` / `W` | move the start earlier / later (0.2 s, `Shift` = 1 s) |
+| `E` / `R` | move the end earlier / later (0.2 s, `Shift` = 1 s) |
+| `Enter` or `C` | cut the slice and keep watching (only a start marked = cut up to the current position) |
 | `Esc` | clear the marks |
-| `N` | next recording (when you opened several) |
+| `P` / `N` | previous / next recording |
 | `J` | join the slices you cut |
 | `↑` / `↓` | volume |
+
+The flow: **I → O** (it loops) → tweak with **Q W E R** → **Enter**. Marking again with I/O just replaces the marks.
+
+Click anywhere on the timeline to jump there, or drag it (the video pauses and goes silent while you drag). Opened several recordings? They're listed on the right — click one to switch.
 
 Slices are saved next to the recording as `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** to get the audio too.
 
