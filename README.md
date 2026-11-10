@@ -1,0 +1,77 @@
+# FragCut
+
+**Cut the best moments out of your game recordings and stitch them into one video — right from the right-click menu.**
+
+Right-click a recording → **Send to → FragCut**. Watch it, press **I** at the start of the play, **O** at the end, **C** to cut. Do it for a few clips, press **J**, and you've got a montage. No timeline, no effects, no account, nothing running in the background.
+
+- **Mark while watching** — a small player with keyboard controls. Slices save in the background while you keep watching.
+- **One-key join** — stitch slices together in the order you choose. Slices from FragCut join **instantly with no quality loss**.
+- **Fast** — encodes on your graphics card (NVIDIA, AMD or Intel), falls back to the CPU.
+- **Tiny** — a few PowerShell scripts plus [ffmpeg](https://ffmpeg.org). Nothing to keep running, no tray icon, no telemetry.
+- Works with NVIDIA ShadowPlay / NVIDIA App, Xbox Game Bar, AMD ReLive, OBS and Steam recordings (any MP4/MKV ffmpeg can read).
+
+> Windows 10 / 11.
+
+## Install
+
+1. Download `FragCut-vX.Y.Z.zip` from [Releases](https://github.com/tsufbarkai/fragcut/releases/latest) and unzip it.
+2. Double-click **`Install.bat`**.
+   - *"Windows protected your PC"*: click **More info → Run anyway**. FragCut isn't code-signed (certificates cost money); the scripts are plain text — read them if you like.
+   - If [ffmpeg](https://ffmpeg.org) isn't installed, the installer offers to install it with `winget` (`Gyan.FFmpeg.Essentials`).
+3. Right-click a recording → **Send to → FragCut**.
+   On Windows 11, *Send to* is under **Show more options** (or **Shift + right-click**).
+
+No admin rights needed. Installs to `%LOCALAPPDATA%\FragCut`.
+
+## Use
+
+### FragCut — watch, mark, cut
+
+| Key | Action |
+|---|---|
+| `Space` | play / pause |
+| `←` / `→` | back / forward 0.5 s (`Shift` = 5 s, `Ctrl` = 30 s) |
+| `,` / `.` | one frame back / forward |
+| `I` | mark start |
+| `O` | mark end |
+| `C` or `Enter` | cut the slice (no end marked = cut up to the current position) |
+| `Esc` | clear the marks |
+| `N` | next recording (when you opened several) |
+| `J` | join the slices you cut |
+| `↑` / `↓` | volume |
+
+Slices are saved next to the recording as `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** to get the audio too.
+
+### Join clips
+
+Press `J` in FragCut, or select clips → **Send to → FragCut - Join clips**. It lists them in recording order; press Enter or type a new order (`3 1 2`, leave numbers out to skip). Clips in the same format are joined losslessly in a second; mixed resolutions/frame rates are re-encoded automatically. Output: `<first recording> - montage.mp4`.
+
+### Cut by time
+
+Know the timestamps already? **Send to → FragCut - Cut by time**, type `1:38` and `1:43`. Saves an MP4 and an MP3.
+
+## FAQ
+
+**The video is black / won't play.** It's probably HEVC (H.265) or AV1. Install *HEVC Video Extensions* or *AV1 Video Extension* from the Microsoft Store, or record in H.264. (Cutting still works — only the preview needs the codec.)
+
+**Which encoder is used?** The first one that works on your PC: NVIDIA NVENC → AMD AMF → Intel Quick Sync → CPU (x264). The FragCut window title shows it.
+
+**Does it upload anything?** No. Everything runs locally with ffmpeg.
+
+**Uninstall?** Run `Uninstall.bat` (in the zip or in `%LOCALAPPDATA%\FragCut`). Your clips stay.
+
+## How it works
+
+PowerShell + WPF for the player (Windows' built-in media engine), ffmpeg for cutting and joining. Slices are encoded with fixed settings (H.264 + AAC 48 kHz stereo), which is what lets the joiner use ffmpeg's concat demuxer with stream copy instead of re-encoding.
+
+| File | What it is |
+|---|---|
+| `FragCut.ps1` | the player: mark & cut |
+| `Join.ps1` | join clips |
+| `TimeCut.ps1` | cut by typed times |
+| `Core.ps1` | shared helpers (encoder detection, naming, ffmpeg args) |
+| `Install.ps1` / `Uninstall.ps1` | add / remove the Send to + Desktop shortcuts |
+
+## License
+
+[MIT](LICENSE). ffmpeg is not included; it's installed separately and is licensed under the LGPL/GPL.

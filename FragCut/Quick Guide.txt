@@ -1,0 +1,70 @@
+FRAGCUT - QUICK GUIDE
+=====================
+Cut the best moments out of your game recordings and stitch them into one video.
+Right-click a recording, watch, press I / O / C. Free, no account, nothing runs in the background.
+
+
+INSTALL
+-------
+1. Unzip the whole folder (right-click the zip > Extract All).
+2. Double-click Install.bat.
+   - "Windows protected your PC"?  Click "More info" > "Run anyway" (FragCut is not code-signed).
+   - No ffmpeg (the free video engine FragCut uses)?  The installer offers to install it. Say Y.
+3. Done. You get:
+   - right-click a video > Send to > FragCut / FragCut - Join clips / FragCut - Cut by time
+   - "FragCut" on the Desktop
+   Windows 11: "Send to" is under "Show more options" (or hold Shift while right-clicking).
+
+
+FRAGCUT - watch, mark, cut
+--------------------------
+Select one or more recordings > right-click > Send to > FragCut.
+The video plays. Mark the part you want and press C. Slices save in the background
+(next to the recording) while you keep watching.
+
+  Space ............ play / pause
+  Left / Right ..... back / forward 0.5 s   (Shift = 5 s, Ctrl = 30 s)
+  , / . ............ one frame back / forward
+  I ................ mark start
+  O ................ mark end
+  C or Enter ....... cut the slice   (no end marked = cut up to where the video is now)
+  Esc .............. clear the marks
+  N ................ next recording   (when you opened several)
+  J ................ join the slices you cut into one video
+  Up / Down ........ volume
+
+  "Also save MP3" = also save the sound of each slice as an MP3.
+  The orange bar above the timeline shows the marked part.
+  Slices are named like:  <recording> - clip 01m38-01m43.mp4
+
+
+JOIN CLIPS - stitch slices together
+-----------------------------------
+Press J in FragCut, or select slices in Explorer > right-click > Send to > FragCut - Join clips.
+- Lists the slices in recording order. Press Enter to keep it, or type a new order: 3 1 2
+  (leave a number out to skip that slice).
+- Slices made by FragCut join instantly with no quality loss.
+- Slices with different resolution / fps are re-encoded automatically.
+- Saved as:  <first recording> - montage.mp4   (optionally + MP3)
+
+
+CUT BY TIME - type the times instead
+------------------------------------
+Right-click a video > Send to > FragCut - Cut by time, then type start and end:
+98   1:38   1:01:38   1:38.5   (empty end = until the end). Saves an MP4 + MP3.
+
+
+GOOD TO KNOW
+------------
+- Encoding uses your graphics card when it can (NVIDIA, AMD or Intel), otherwise the CPU (slower, same result).
+  The window title shows which one is used.
+- Video black / won't play in FragCut?  It's probably HEVC/H.265 or AV1: install "HEVC Video Extensions"
+  or "AV1 Video Extension" from the Microsoft Store, or record in H.264.
+- Nothing is uploaded anywhere. Everything runs on your PC.
+- Manual ffmpeg install: open PowerShell and run   winget install Gyan.FFmpeg.Essentials   then reopen FragCut.
+
+
+UNINSTALL
+---------
+Run Uninstall.bat (in the unzipped folder, or in %LOCALAPPDATA%\FragCut).
+Removes the shortcuts and FragCut. Your clips are not touched.
