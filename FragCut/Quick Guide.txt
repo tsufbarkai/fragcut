@@ -33,7 +33,8 @@ Slices save in the background (next to the recording) while you keep watching.
   Esc .............. clear the marks
   P / N ............ previous / next recording
   J ................ join the slices you cut into one video
-  Up / Down ........ volume
+  Up / Down ........ playback speed: 0.25x, 0.5x, 1x, 2x, 4x
+  + / - ............ volume
 
   Click anywhere on the timeline to jump there, or drag it (pauses + mutes while dragging).
   Opened several recordings? They're listed on the right - click one to switch.

@@ -7,7 +7,7 @@
 #        Q / W  start earlier / later   E / R  end earlier / later   (0.2 s, Shift = 1 s)
 #        Enter or C  cut the slice and keep watching     Esc  clear the marks
 #        P / N  previous / next recording   J  join the slices cut in this window
-#        Up/Down  volume
+#        Up/Down  playback speed (0.25x 0.5x 1x 2x 4x)     + / -  volume
 # Slices are saved next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
 
@@ -67,7 +67,7 @@ if ($queue.Count -eq 0) { exit }
     </Canvas>
     <Slider x:Name="Seek" Grid.Row="3" Minimum="0" Maximum="1" Focusable="False" Margin="0,2,0,0" Cursor="Hand"/>
     <DockPanel Grid.Row="4" Margin="0,8,0,0" LastChildFill="True">
-      <TextBlock x:Name="TimeText" DockPanel.Dock="Left" FontFamily="Consolas" FontSize="18" VerticalAlignment="Center" Width="230"/>
+      <TextBlock x:Name="TimeText" DockPanel.Dock="Left" FontFamily="Consolas" FontSize="18" VerticalAlignment="Center" Width="290"/>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
         <TextBlock Text="Vol" VerticalAlignment="Center" Margin="12,0,6,0"/>
         <Slider x:Name="Vol" Width="110" Minimum="0" Maximum="1" Value="0.6" Focusable="False" VerticalAlignment="Center"/>
@@ -114,6 +114,7 @@ $st = @{
     Done = New-Object System.Collections.ArrayList     # finished slice mp4 files
     Enc = (Get-Encoder $ffmpeg)
     SyncingList = $false
+    Speeds = @(0.25, 0.5, 1.0, 2.0, 4.0); SpeedIx = 2
 }
 
 function Set-Status($i, $text) { $ui.Slices.Items[$i] = $text }
@@ -136,7 +137,7 @@ function Load-Video([int]$i) {
     $ui.TitleText.Text = ('[{0}/{1}]  {2}' -f ($i + 1), $queue.Count, (Split-Path $st.Video -Leaf))
     $ui.Player.Source = New-Object Uri($st.Video)
     $ui.Player.Volume = $ui.Vol.Value
-    $ui.Player.Play(); $st.Playing = $true
+    Start-Playing; $st.Playing = $true
     $st.LastSeekAt = [datetime]::MinValue
     Refresh-Videos
     Update-Marks
@@ -157,11 +158,22 @@ function Seek-To([double]$s) {
     if ($st.Dur -gt 0) { $s = [math]::Max(0.0, [math]::Min($s, $st.Dur - 0.02)) } else { $s = [math]::Max(0.0, $s) }
     if ($st.Playing) { $ui.Player.Pause() }
     $ui.Player.Position = [TimeSpan]::FromSeconds($s)
-    if ($st.Playing) { $ui.Player.Play() }
+    if ($st.Playing) { Start-Playing }
     $ui.Seek.Value = $s
     $st.LastSeek = $s; $st.LastSeekAt = [datetime]::Now
 }
-function Play { $ui.Player.Play(); $st.Playing = $true }
+# Play at the chosen speed (the player can forget the speed after a pause/seek, so set it every time)
+function Start-Playing { $ui.Player.SpeedRatio = $st.Speeds[$st.SpeedIx]; $ui.Player.Play(); $ui.Player.SpeedRatio = $st.Speeds[$st.SpeedIx] }
+function Play { Start-Playing; $st.Playing = $true }
+function Change-Speed([int]$d) {
+    $st.SpeedIx = [math]::Max(0, [math]::Min($st.Speeds.Count - 1, $st.SpeedIx + $d))
+    $ui.Player.SpeedRatio = $st.Speeds[$st.SpeedIx]   # applies live while playing
+}
+function Speed-Text {
+    $x = [double]$st.Speeds[$st.SpeedIx]
+    if ($x -eq 1.0) { return '' }
+    return ('   {0}x' -f $x.ToString([Globalization.CultureInfo]::InvariantCulture))
+}
 function Pause-Video { $ui.Player.Pause(); $st.Playing = $false }
 function Toggle-Play { if ($st.Playing) { Pause-Video } else { Play } }
 function Step([double]$d) { if ($st.Playing) { Pause-Video }; Seek-To ((Base-Pos) + $d) }
@@ -380,8 +392,10 @@ $win.Add_PreviewKeyDown({
         'N'          { Next-Video }
         'P'          { Prev-Video }
         'J'          { Join-Slices }
-        'Up'         { $ui.Vol.Value = [math]::Min(1.0, $ui.Vol.Value + 0.05) }
-        'Down'       { $ui.Vol.Value = [math]::Max(0.0, $ui.Vol.Value - 0.05) }
+        'Up'         { Change-Speed 1 }
+        'Down'       { Change-Speed -1 }
+        { $_ -in 'OemPlus','Add' }       { $ui.Vol.Value = [math]::Min(1.0, $ui.Vol.Value + 0.05) }
+        { $_ -in 'OemMinus','Subtract' } { $ui.Vol.Value = [math]::Max(0.0, $ui.Vol.Value - 0.05) }
         { $_ -in 'Escape','Back','Delete' } { Clear-Marks }
         default      { $h = $false }
     }
@@ -396,7 +410,7 @@ $timer.Add_Tick({
         # loop the marked part
         if ((Looping) -and $st.Playing -and -not $st.Dragging -and $p -ge $st.End -and ([datetime]::Now - $st.LastSeekAt).TotalMilliseconds -gt 150) { Seek-To $st.Start; $p = $st.Start }
         if (-not $st.Dragging) { $ui.Seek.Value = $p }
-        $ui.TimeText.Text = '{0} / {1}' -f (Short $p), (Short $st.Dur)
+        $ui.TimeText.Text = '{0} / {1}{2}' -f (Short $p), (Short $st.Dur), (Speed-Text)
         if ($null -ne $st.Start -and $null -eq $st.End) { Update-Marks }
         Check-Jobs
     } catch {}
@@ -432,8 +446,14 @@ if ($SelfTest) {
             28 { Nudge 'end' 0.2; Nudge 'start' (-0.2); L ("  >> nudged: {0:N1}-{1:N1}" -f $st.Start, $st.End) }
             31 { $ui.ChkMp3.IsChecked = $true; Cut-Slice; L ("  >> cut, target after cut={0:N2}" -f $st.LastSeek) }
             33 { L ("t33 pos={0:N2} playing={1}" -f (Pos), $st.Playing) }
+            34 { Seek-To 6.0; Change-Speed 1; $script:sp = Pos; L ("  >> speed now {0}" -f (Speed-Text)) }
+            38 { L ("  2x: moved {0:N2} s in 1 s" -f ((Pos) - $script:sp)); Change-Speed 1; Change-Speed 1; $script:sp = Pos; L ("  >> speed now {0} (Up pressed past the top)" -f (Speed-Text)) }
+            42 { L ("  4x: moved {0:N2} s in 1 s" -f ((Pos) - $script:sp)); Change-Speed -1; Change-Speed -1; Change-Speed -1; $script:sp = Pos; L ("  >> speed now {0}" -f (Speed-Text)) }
+            44 { L ("  0.5x: moved {0:N2} s in 0.5 s" -f ((Pos) - $script:sp)); Change-Speed -1; $script:sp = Pos; L ("  >> speed now {0}" -f (Speed-Text)) }
+            46 { L ("  0.25x: moved {0:N2} s in 1 s" -f ((Pos) - $script:sp)); Seek-To 2.0; $script:sp = Pos }
+            50 { L ("  0.25x after a seek: moved {0:N2} s in 1 s (speed must stick)" -f ((Pos) - $script:sp)) }
         }
-        if ($k -gt 33 -and -not $st.Running -and $st.Jobs.Count -eq 0) {
+        if ($k -gt 50 -and -not $st.Running -and $st.Jobs.Count -eq 0) {
             Write-Host ("SELFTEST`n  " + ($script:tlog -join "`n  ") + "`n  slices: " + ($ui.Slices.Items -join ' || '))
             $tt.Stop(); $win.Close()
         }

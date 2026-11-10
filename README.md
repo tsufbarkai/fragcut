@@ -40,7 +40,8 @@ No admin rights needed. Installs to `%LOCALAPPDATA%\FragCut`.
 | `Esc` | clear the marks |
 | `P` / `N` | previous / next recording |
 | `J` | join the slices you cut |
-| `↑` / `↓` | volume |
+| `↑` / `↓` | playback speed: 0.25x · 0.5x · 1x · 2x · 4x |
+| `+` / `-` | volume |
 
 The flow: **I → O** (it loops) → tweak with **Q W E R** → **Enter**. Marking again with I/O just replaces the marks.
 

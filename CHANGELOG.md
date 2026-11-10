@@ -4,10 +4,11 @@
 
 - **Loop the marked part**: once start and end are marked, playback loops just that part.
   `Q`/`W` move the start, `E`/`R` move the end (0.2 s, `Shift` = 1 s); `Enter` cuts and keeps watching from the end of the slice.
+- **Playback speed** on `↑`/`↓`: 0.25x, 0.5x, 1x, 2x, 4x (shown next to the time). Volume moved to `+`/`-`.
 - **Recordings list** on the right: click to switch; `P` / `N` for previous / next.
 - **Timeline**: click anywhere to jump there; dragging pauses and mutes instead of scrambling the audio.
 - Fixed: seeking (arrow keys, frame step, timeline) was rounded down to whole seconds, so ← 0.5 s could get stuck.
-- Fixed: Up/Down volume jumped straight to 0 or full.
+- Fixed: volume keys jumped straight to 0 or full.
 - Fixed: exact video length (the last fraction of a second could not be reached).
 
 ## 1.0.0 — first release
