@@ -1,7 +1,7 @@
 ﻿# FragCut - shared helpers (dot-sourced by FragCut.ps1, Join.ps1, TimeCut.ps1, Compress.ps1 and KillScan.ps1).
 # https://github.com/tsufbarkai/fragcut
 
-$FragCutVersion = '1.3.0'
+$FragCutVersion = '1.4.0'
 $script:Inv = [Globalization.CultureInfo]::InvariantCulture
 $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'FragCut\settings.json'
 

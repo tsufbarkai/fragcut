@@ -12,6 +12,7 @@ INSTALL
    - No ffmpeg (the free video engine FragCut uses)?  The installer offers to install it. Say Y.
 3. Done. You get:
    - right-click a video > Send to > FragCut / FragCut - Join clips / FragCut - Cut by time / FragCut - Compress
+     / FragCut - Kill montage
    - "FragCut" on the Desktop
    Windows 11: "Send to" is under "Show more options" (or hold Shift while right-clicking).
 
@@ -50,6 +51,10 @@ Press K. FragCut looks for the KILL / HEADSHOT / KILL CONFIRMED tags and puts a 
 timeline for each kill (you can keep watching; a 2-minute recording takes about 10 seconds).
 Then K jumps to the next kill and marks 8 s before it to 2 s after, on repeat. Enter saves it.
 Shift+K goes back. Results are remembered. Needs a 16:9 recording and the default HUD.
+
+KILL MONTAGE: select recordings > right-click > Send to > FragCut - Kill montage.
+Finds the kills, takes 5 s before to 1 s after each, and joins them into
+<first recording> - kill montage.mp4. No questions asked.
 
 
 JOIN CLIPS - stitch slices together

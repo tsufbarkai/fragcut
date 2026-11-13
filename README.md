@@ -66,6 +66,12 @@ Kills close together (a double kill, a squad wipe) count as one moment. FragCut 
 
 It only knows Battlefield 6 for now, and the recording has to be 16:9 (1080p, 1440p, 4K, 720p ...).
 
+### Kill montage (Battlefield 6)
+
+Select one or more recordings and choose **Send to → FragCut - Kill montage**. It finds the kills in each recording, takes 5 seconds before each kill and 1 second after, and joins all of them into one video named `<first recording> - kill montage.mp4`. Nothing to click in between; it shows its progress in a small window.
+
+Kills close together share one clip, so a double kill isn't repeated. If some recordings are 720p and others 1440p, the clips are scaled to the bigger size. Recordings that were already searched (with `K` or an earlier montage) aren't searched again.
+
 ### Joining clips
 
 Press `J` in FragCut, or select clips in Explorer and choose **Send to → FragCut - Join clips**.
@@ -116,6 +122,7 @@ Every clip is encoded with the same settings (H.264 video, AAC 48 kHz stereo aud
 | `Compress.ps1` | make a smaller copy of a video |
 | `Kills.ps1` | find kills: ffmpeg reads the tag area 5 times a second, a small C# matcher compares it with the pictures in `kills\` |
 | `KillScan.ps1` | list the kills in recordings from the command line |
+| `KillMontage.ps1` | find the kills in recordings and join them into one video |
 | `kills\bf6\` | pictures of the Battlefield 6 kill tags |
 | `Core.ps1` | shared code (encoder detection, file names, ffmpeg settings) |
 | `Install.ps1` / `Uninstall.ps1` | add / remove the Send to and Desktop shortcuts |

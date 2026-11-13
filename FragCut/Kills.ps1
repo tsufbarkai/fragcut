@@ -11,7 +11,7 @@ $script:KillProfiles = @{
     bf6 = @{ Name = 'Battlefield 6'; Folder = 'bf6'; Region = @(150, 380, 550, 200); Bright = 150; MinScore = 0.70; Fps = 5 }
 }
 $script:KillCacheFile = Join-Path $env:LOCALAPPDATA 'FragCut\kills-cache.json'
-$script:KillCacheVersion = 1      # bump when templates/settings change, so old results are not reused
+$script:KillCacheVersion = 2     # bump when templates/settings change, so old results are not reused
 
 # The matcher is C# (compiled on first use, ~1 s) so it is fast enough without extra software.
 function Initialize-KillScanner {
@@ -223,23 +223,36 @@ function Get-KillCacheKey($video) {
     $f = Get-Item -LiteralPath $video
     return '{0}|{1}|{2}|v{3}' -f $f.FullName.ToLowerInvariant(), $f.Length, $f.LastWriteTimeUtc.Ticks, $script:KillCacheVersion
 }
+# (Windows PowerShell passes a JSON list down a pipeline as ONE item, so these use plain foreach loops.)
+function Read-KillCache {
+    $out = New-Object System.Collections.ArrayList
+    try {
+        $c = ConvertFrom-Json (Get-Content -LiteralPath $script:KillCacheFile -Raw -ErrorAction Stop)
+        foreach ($e in $c) { if ($e.Key) { [void]$out.Add($e) } }
+    } catch {}
+    return ,$out
+}
 function Get-CachedKills($video) {
     try {
         $key = Get-KillCacheKey $video
-        $c = Get-Content -LiteralPath $script:KillCacheFile -Raw -ErrorAction Stop | ConvertFrom-Json
-        $hit = $c | Where-Object { $_.Key -eq $key } | Select-Object -First 1
-        if ($hit) { return ,@($hit.Kills | ForEach-Object { [double]$_ }) }
+        foreach ($e in (Read-KillCache)) {
+            if ($e.Key -eq $key) {
+                $t = New-Object System.Collections.ArrayList
+                foreach ($x in $e.Kills) { [void]$t.Add([double]$x) }
+                return ,([double[]]$t.ToArray())
+            }
+        }
     } catch {}
     return $null
 }
 function Save-CachedKills($video, [double[]]$times) {
     try {
         $key = Get-KillCacheKey $video
-        $c = @()
-        try { $c = @(Get-Content -LiteralPath $script:KillCacheFile -Raw -ErrorAction Stop | ConvertFrom-Json) } catch {}
-        $c = @($c | Where-Object { $_.Key -ne $key -and $_.Key -like "*|v$($script:KillCacheVersion)" } | Select-Object -Last 199)
-        $c += [pscustomobject]@{ Key = $key; Kills = @($times) }
+        $keep = New-Object System.Collections.ArrayList
+        foreach ($e in (Read-KillCache)) { if ($e.Key -ne $key -and $e.Key -like "*|v$($script:KillCacheVersion)") { [void]$keep.Add($e) } }
+        while ($keep.Count -ge 500) { $keep.RemoveAt(0) }                    # keep the 500 most recent recordings
+        [void]$keep.Add([pscustomobject]@{ Key = $key; Kills = @($times) })
         New-Item -ItemType Directory -Force (Split-Path $script:KillCacheFile) | Out-Null
-        ConvertTo-Json -InputObject @($c) -Depth 4 | Set-Content -LiteralPath $script:KillCacheFile -Encoding UTF8
+        ConvertTo-Json -InputObject $keep.ToArray() -Depth 4 | Set-Content -LiteralPath $script:KillCacheFile -Encoding UTF8
     } catch {}
 }

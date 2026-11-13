@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0
+
+- **Kill montage (Battlefield 6)**: select recordings > *Send to > FragCut - Kill montage*. It finds the kills in each one,
+  cuts 5 seconds before each kill to 1 second after, and joins them into `<first recording> - kill montage.mp4`.
+  Kills close together share one clip. Recordings of different sizes (720p and 1440p) are scaled to the biggest.
+- Fixed: Find kills searched a recording again when results for several recordings were saved.
+
 ## 1.3.0
 
 - **Find kills (Battlefield 6)**: press `K` in FragCut. It looks through the recording for the game's kill tags
