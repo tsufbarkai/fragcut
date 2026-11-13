@@ -1,0 +1,35 @@
+# Checks every pull request (and every push to main):
+#  - build.ps1 runs: all scripts parse, CHANGELOG.md has a section for the current version, the zip builds
+#  - PSScriptAnalyzer: errors fail the check; warnings are listed in the log but don't fail it
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build (parse check + changelog + zip)
+        shell: powershell
+        run: ./build.ps1
+
+      - name: PSScriptAnalyzer
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable PSScriptAnalyzer)) {
+              Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          }
+          $all = Invoke-ScriptAnalyzer -Path . -Recurse
+          $all | Sort-Object ScriptName, Line | Format-Table Severity, RuleName, ScriptName, Line, Message -AutoSize -Wrap | Out-String -Width 220
+          $errors = @($all | Where-Object Severity -eq 'Error')
+          Write-Host "$($errors.Count) error(s), $(@($all).Count - $errors.Count) warning(s)/info"
+          if ($errors.Count) { exit 1 }
