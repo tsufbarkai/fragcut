@@ -2,7 +2,7 @@
 # Your clips and ffmpeg are not touched (remove ffmpeg with: winget uninstall Gyan.FFmpeg.Essentials).
 $send = Join-Path $env:APPDATA 'Microsoft\Windows\SendTo'
 $desk = [Environment]::GetFolderPath('Desktop')
-foreach ($l in "$send\FragCut.lnk", "$send\FragCut - Join clips.lnk", "$send\FragCut - Cut by time.lnk", "$desk\FragCut.lnk") {
+foreach ($l in "$send\FragCut.lnk", "$send\FragCut - Join clips.lnk", "$send\FragCut - Cut by time.lnk", "$send\FragCut - Compress.lnk","$desk\FragCut.lnk") {
     if (Test-Path -LiteralPath $l) { Remove-Item -LiteralPath $l -Force; Write-Host "removed $l" }
 }
 $dir = "$env:LOCALAPPDATA\FragCut"

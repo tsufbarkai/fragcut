@@ -12,7 +12,7 @@ try {
 
     # 1) copy the tools
     New-Item -ItemType Directory -Force $Dest | Out-Null
-    $files = 'Core.ps1','FragCut.ps1','Join.ps1','Join.bat','TimeCut.ps1','TimeCut.bat','Uninstall.ps1','Uninstall.bat','Quick Guide.txt'
+    $files = 'Core.ps1','FragCut.ps1','Join.ps1','Join.bat','TimeCut.ps1','TimeCut.bat','Compress.ps1','Compress.bat','Uninstall.ps1','Uninstall.bat','Quick Guide.txt'
     foreach ($f in $files) {
         $src = Join-Path $PSScriptRoot $f
         if (-not (Test-Path -LiteralPath $src)) { throw "missing file in the package: $f (unzip the whole folder first)" }
@@ -64,7 +64,8 @@ try {
         New-Lnk "$desk\FragCut.lnk"               $ps $main "$env:WINDIR\System32\imageres.dll,18" $true
         New-Lnk "$send\FragCut - Join clips.lnk"  "$Dest\Join.bat"    '' "$env:WINDIR\System32\imageres.dll,19" $false
         New-Lnk "$send\FragCut - Cut by time.lnk" "$Dest\TimeCut.bat" '' "$env:WINDIR\System32\imageres.dll,18" $false
-        Write-Host '  added to right-click > Send to:  FragCut, FragCut - Join clips, FragCut - Cut by time' -ForegroundColor Green
+        New-Lnk "$send\FragCut - Compress.lnk"    "$Dest\Compress.bat" '' "$env:WINDIR\System32\imageres.dll,174" $false
+        Write-Host '  added to right-click > Send to:  FragCut, FragCut - Join clips, FragCut - Cut by time, FragCut - Compress' -ForegroundColor Green
         Write-Host '  added "FragCut" to the Desktop' -ForegroundColor Green
     }
 

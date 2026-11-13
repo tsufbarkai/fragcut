@@ -11,7 +11,7 @@ INSTALL
    - "Windows protected your PC"?  Click "More info" > "Run anyway" (FragCut is not code-signed).
    - No ffmpeg (the free video engine FragCut uses)?  The installer offers to install it. Say Y.
 3. Done. You get:
-   - right-click a video > Send to > FragCut / FragCut - Join clips / FragCut - Cut by time
+   - right-click a video > Send to > FragCut / FragCut - Join clips / FragCut - Cut by time / FragCut - Compress
    - "FragCut" on the Desktop
    Windows 11: "Send to" is under "Show more options" (or hold Shift while right-clicking).
 
@@ -57,6 +57,14 @@ CUT BY TIME - type the times instead
 ------------------------------------
 Right-click a video > Send to > FragCut - Cut by time, then type start and end:
 98   1:38   1:01:38   1:38.5   (empty end = until the end). Saves an MP4 + MP3.
+
+
+COMPRESS - smaller file to share
+--------------------------------
+Select one or more videos > right-click > Send to > FragCut - Compress.
+- Makes a copy about half the size that looks nearly the same (H.264, plays everywhere).
+- Saved as:  <name> - compressed.mp4   next to the original. The original is not changed.
+- Game recordings and montages shrink the most. Already-small videos are skipped.
 
 
 GOOD TO KNOW

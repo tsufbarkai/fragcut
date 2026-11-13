@@ -57,6 +57,10 @@ Press `J` in FragCut, or select clips → **Send to → FragCut - Join clips**. 
 
 Know the timestamps already? **Send to → FragCut - Cut by time**, type `1:38` and `1:43`. Saves an MP4 and an MP3.
 
+### Compress
+
+Montage too big to send? Select videos → **Send to → FragCut - Compress**. You get `<name> - compressed.mp4`, about half the size and hard to tell apart from the original (H.264, so it plays everywhere). The original is left alone.
+
 ## FAQ
 
 **The video is black / won't play.** It's probably HEVC (H.265) or AV1. Install *HEVC Video Extensions* or *AV1 Video Extension* from the Microsoft Store, or record in H.264. (Cutting still works — only the preview needs the codec.)
@@ -76,6 +80,7 @@ PowerShell + WPF for the player (Windows' built-in media engine), ffmpeg for cut
 | `FragCut.ps1` | the player: mark & cut |
 | `Join.ps1` | join clips |
 | `TimeCut.ps1` | cut by typed times |
+| `Compress.ps1` | smaller copy of a video (H.264, GPU-encoded) |
 | `Core.ps1` | shared helpers (encoder detection, naming, ffmpeg args) |
 | `Install.ps1` / `Uninstall.ps1` | add / remove the Send to + Desktop shortcuts |
 

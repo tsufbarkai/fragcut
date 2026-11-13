@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- **Compress**: *Send to → FragCut - Compress* makes a copy about half the size that looks nearly the same
+  (H.264 on the GPU; a 1440p60 montage went from 227 MB to about half, VMAF ~93). Works on several files at once.
+
 ## 1.1.0
 
 - **Loop the marked part**: once start and end are marked, playback loops just that part.
