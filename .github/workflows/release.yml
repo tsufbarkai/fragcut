@@ -1,0 +1,50 @@
+# Publishes a GitHub Release whenever a new version lands on main.
+#
+# How to release: bump $FragCutVersion in FragCut/Core.ps1, add a "## <version>" section to
+# CHANGELOG.md, commit, push. This workflow then builds FragCut-v<version>.zip, tags v<version>
+# and creates the release with that changelog section as the notes.
+# Pushes that don't change the version do nothing (the release for it already exists).
+# Run it by hand from the Actions tab ("Run workflow") to publish the current version if it's missing.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ['FragCut/**', 'CHANGELOG.md', 'build.ps1']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build zip and release notes
+        id: build
+        shell: powershell          # Windows PowerShell 5.1, same as users run
+        run: ./build.ps1
+
+      - name: Publish release (skip if this version is already released)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.build.outputs.version }}
+        run: |
+          tag="v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists - nothing to do."
+            exit 0
+          fi
+          gh release create "$tag" "dist/FragCut-$tag.zip" \
+            --target "$GITHUB_SHA" \
+            --title "FragCut $VERSION" \
+            --notes-file dist/release-notes.md \
+            --latest
+          echo "Published $tag"
