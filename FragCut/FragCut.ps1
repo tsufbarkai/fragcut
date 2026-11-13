@@ -228,14 +228,17 @@ function Nudge([string]$which, [double]$d) {
 function Start-Next-Job {
     if ($st.Running -or $st.Jobs.Count -eq 0) { return }
     $job = $st.Jobs[0]; $st.Jobs.RemoveAt(0)
-    $argv = if ($job.Kind -eq 'mp4') { Get-CutArgs $job.Video $job.Start $job.Len $job.Mp4 $st.Enc } else { Get-Mp3Args $job.Video $job.Start $job.Len $job.Mp3 }
+    # OBS open (e.g. recording this window)? Share the GPU encoder: lighter preset, paced, low priority.
+    $gentle = ($job.Kind -eq 'mp4') -and (Test-ObsRunning)
+    $argv = if ($job.Kind -eq 'mp4') { Get-CutArgs $job.Video $job.Start $job.Len $job.Mp4 $st.Enc -Gentle:$gentle } else { Get-Mp3Args $job.Video $job.Start $job.Len $job.Mp3 }
     $psi = New-Object Diagnostics.ProcessStartInfo
     $psi.FileName = $ffmpeg
     $psi.Arguments = ($argv | ForEach-Object { Quote-Arg $_ }) -join ' '
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
     $job.Proc = [Diagnostics.Process]::Start($psi)
+    if ($gentle) { try { $job.Proc.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal } catch {} }
     $st.Running = $job
-    if ($job.Kind -eq 'mp4') { Set-Status $job.Row ("{0}  saving..." -f $job.Label) } else { Set-Status $job.Row ($ui.Slices.Items[$job.Row] + '   + MP3...') }
+    if ($job.Kind -eq 'mp4') { Set-Status $job.Row ("{0}  saving{1}..." -f $job.Label, $(if ($gentle) { ' (gently - OBS is open)' } else { '' })) } else { Set-Status $job.Row ($ui.Slices.Items[$job.Row] + '   + MP3...') }
 }
 
 function Check-Jobs {

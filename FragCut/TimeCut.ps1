@@ -52,12 +52,12 @@ try {
         $out = Get-SlicePaths $Video $start $end
         Write-Host "Cutting $(Fmt $start) -> $(Fmt $end)  ($([math]::Round($len,1)) s)..."
 
-        & $ffmpeg @(Get-CutArgs $Video $start $len $out.Mp4 $enc)
+        & $ffmpeg @(Get-CutArgs $Video $start $len $out.Mp4 $enc -Gentle:(Test-ObsRunning))
         $ok = ($LASTEXITCODE -eq 0)
         if (-not $ok -and $enc -ne 'libx264') {
             Write-Host '  GPU encoder failed, using CPU encoder...' -ForegroundColor Yellow
             $enc = 'libx264'; Reset-Encoder
-            & $ffmpeg @(Get-CutArgs $Video $start $len $out.Mp4 $enc)
+            & $ffmpeg @(Get-CutArgs $Video $start $len $out.Mp4 $enc -Gentle:(Test-ObsRunning))
             $ok = ($LASTEXITCODE -eq 0)
         }
         if ($ok) { $last = $out.Mp4 } else { Write-Host '  Video clip failed.' -ForegroundColor Red }

@@ -67,6 +67,8 @@ Montage too big to send? Select videos → **Send to → FragCut - Compress**. Y
 
 **Which encoder is used?** The first one that works on your PC: NVIDIA NVENC → AMD AMF → Intel Quick Sync → CPU (x264). The FragCut window title shows it.
 
+**Recording FragCut with OBS?** FragCut notices OBS is open and cuts slices gently (paced, lighter GPU preset), because both share the graphics card's video encoder. Slices take a moment longer to save; your OBS recording doesn't drop frames.
+
 **Does it upload anything?** No. Everything runs locally with ffmpeg.
 
 **Uninstall?** Run `Uninstall.bat` (in the zip or in `%LOCALAPPDATA%\FragCut`). Your clips stay.

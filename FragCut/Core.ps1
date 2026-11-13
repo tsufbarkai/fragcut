@@ -1,7 +1,7 @@
 ﻿# FragCut - shared helpers (dot-sourced by FragCut.ps1, Join.ps1, TimeCut.ps1 and Compress.ps1).
 # https://github.com/tsufbarkai/fragcut
 
-$FragCutVersion = '1.2.0'
+$FragCutVersion = '1.2.1'
 $script:Inv = [Globalization.CultureInfo]::InvariantCulture
 $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'FragCut\settings.json'
 
@@ -95,9 +95,9 @@ function Reset-Encoder { Set-Setting 'Encoder' $null }
 
 # High-quality settings per encoder. All slices from one PC use the same encoder,
 # so Join can stitch them without re-encoding.
-function Get-VideoEncArgs([string]$enc) {
+function Get-VideoEncArgs([string]$enc, [switch]$Gentle) {
     switch ($enc) {
-        'h264_nvenc' { return @('-c:v','h264_nvenc','-preset','p7','-tune','hq','-rc','vbr','-cq','19','-b:v','28M','-maxrate','40M','-bufsize','56M') }
+        'h264_nvenc' { return @('-c:v','h264_nvenc','-preset',$(if ($Gentle) { 'p4' } else { 'p7' }),'-tune','hq','-rc','vbr','-cq','19','-b:v','28M','-maxrate','40M','-bufsize','56M') }
         'h264_amf'   { return @('-c:v','h264_amf','-quality','quality','-rc','cqp','-qp_i','18','-qp_p','20','-qp_b','22') }
         'h264_qsv'   { return @('-c:v','h264_qsv','-preset','slower','-global_quality','20') }
         default      { return @('-c:v','libx264','-preset','medium','-crf','18') }
@@ -129,9 +129,15 @@ function Get-SlicePaths($video, [double]$start, [double]$end) {
     return @{ Mp4 = (Join-Path $dir "$try.mp4"); Mp3 = (Join-Path $dir "$try.mp3") }
 }
 
-function Get-CutArgs($video, [double]$start, [double]$len, $mp4, [string]$enc) {
+# OBS shares the graphics card's video encoder. While it runs, slices are cut "gently" so its recording doesn't drop frames.
+function Test-ObsRunning { return [bool](Get-Process -Name 'obs64','obs32','obs' -ErrorAction SilentlyContinue) }
+
+# -Gentle: lighter preset (NVIDIA p4: ~same size/quality, ~2x less encoder time) and paced to 1.5x real time,
+# which leaves room on the video encoder for OBS. Slices still join losslessly with normal ones.
+function Get-CutArgs($video, [double]$start, [double]$len, $mp4, [string]$enc, [switch]$Gentle) {
     $a = @('-hide_banner','-loglevel','error','-y','-ss',(Fmt $start),'-i',$video,'-t',(Fmt $len))
-    $a += Get-VideoEncArgs $enc
+    if ($Gentle) { $a += @('-vf','realtime=speed=1.5') }
+    $a += Get-VideoEncArgs $enc -Gentle:$Gentle
     $a += @('-pix_fmt','yuv420p','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-movflags','+faststart',$mp4)
     return $a
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1
+
+- **Plays nice with OBS**: while OBS is open, slices are cut gently (lighter GPU preset, paced to 1.5x real time,
+  low priority) so an OBS recording of FragCut doesn't drop frames. Same size and quality; slices still join losslessly.
+
 ## 1.2.0
 
 - **Compress**: *Send to → FragCut - Compress* makes a copy about half the size that looks nearly the same
