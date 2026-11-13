@@ -18,5 +18,9 @@ foreach ($v in $Files) {
     if ($sc.Error) { Write-Host "  ERROR: $($sc.Error)" -ForegroundColor Red; continue }
     $k = $sc.Snapshot()
     if (-not $k.Count) { Write-Host '  no kills found' }
-    foreach ($x in $k) { Write-Host ("  {0,-8} {1,-9} score {2:N2}  (on screen {3:N1} s)" -f (Short $x.Time), $x.Tag, $x.Score, ($x.LastSeen - $x.Time + 0.2)) }
+    foreach ($x in $k) {
+        $last = Get-LastKill $x.Time $x.LastSeen
+        $burst = if ($last -gt $x.Time + 0.3) { 'last kill ~' + (Short $last) } else { '' }
+        Write-Host ("  {0,-8} {1,-15} score {2:N2}  on screen {3:N1} s  {4}" -f (Short $x.Time), $x.Tag, $x.Score, ($x.LastSeen - $x.Time + 0.2), $burst)
+    }
 }

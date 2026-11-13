@@ -55,16 +55,23 @@ try {
             while (-not $sc.Done) { Start-Sleep -Milliseconds 300; Write-Host -NoNewline ("`r  looking for kills {0,3:N0}%" -f ($sc.Progress * 100)) }
             Write-Host -NoNewline "`r                              `r"
             if ($sc.Error) { Write-Host "  skipped: $($sc.Error)" -ForegroundColor Yellow; continue }
-            $kills = @($sc.Snapshot() | ForEach-Object { $_.Time })
+            $kills = Get-ScanKills $sc
             Save-CachedKills $v $kills
         }
-        if (@($kills).Count -eq 0) { Write-Host '  no kills'; continue }
-        Write-Host ("  kills at: " + (@($kills | ForEach-Object { Short $_ }) -join ', '))
+        $nt = @($kills.Times).Count
+        if ($nt -eq 0) { Write-Host '  no kills'; continue }
+        # a burst (KILL -> KILL x2 ...) shows as first-last
+        $desc = for ($i = 0; $i -lt $nt; $i++) {
+            $t = $kills.Times[$i]; $l = if ($i -lt @($kills.Lasts).Count) { $kills.Lasts[$i] } else { $t }
+            if ($l -gt $t + 0.3) { '{0}-{1}' -f (Short $t), (Short $l) } else { Short $t }
+        }
+        Write-Host ("  kills at: " + ($desc -join ', '))
 
-        # 2) one clip per kill; kills close together share a clip
+        # 2) one clip per kill: from $Before s before the first kill to $After s after the last one; overlapping clips merge
         $cur = $null
-        foreach ($t in @($kills | Sort-Object)) {
-            $a = [math]::Max(0.0, $t - $Before); $b = [math]::Min($dur, $t + $After)
+        for ($i = 0; $i -lt $nt; $i++) {
+            $t = $kills.Times[$i]; $l = if ($i -lt @($kills.Lasts).Count) { $kills.Lasts[$i] } else { $t }
+            $a = [math]::Max(0.0, $t - $Before); $b = [math]::Min($dur, $l + $After)
             if ($cur -and $a -le $cur.End + 0.5) { $cur.End = [math]::Max($cur.End, $b); $cur.Kills++ }
             else { $cur = [pscustomobject]@{ Video = $v; Start = $a; End = $b; Kills = 1; W = $w; H = $h }; [void]$parts.Add($cur) }
         }

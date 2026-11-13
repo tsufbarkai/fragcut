@@ -5,6 +5,8 @@
 - **Kill montage (Battlefield 6)**: select recordings > *Send to > FragCut - Kill montage*. It finds the kills in each one,
   cuts 5 seconds before each kill to 1 second after, and joins them into `<first recording> - kill montage.mp4`.
   Kills close together share one clip. Recordings of different sizes (720p and 1440p) are scaled to the biggest.
+- **Double kills stay whole**: when KILL turns into KILL x2 (or x3 ...), the clip now runs until after the *last* kill,
+  in the montage and with `K` in FragCut. Before, it ended 1-2 s after the first kill and cut the second one off.
 - Fixed: Find kills searched a recording again when results for several recordings were saved.
 
 ## 1.3.0

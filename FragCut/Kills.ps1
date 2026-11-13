@@ -8,10 +8,17 @@
 # Per game: where the tags appear (x, y, width, height in a 1280x720 frame), the brightness that
 # counts as "text", and the match score (0..1) that counts as a kill.
 $script:KillProfiles = @{
-    bf6 = @{ Name = 'Battlefield 6'; Folder = 'bf6'; Region = @(150, 380, 550, 200); Bright = 150; MinScore = 0.70; Fps = 5 }
+    # Hold: the tags stay on screen this long after the LAST kill (each new kill restarts it: KILL -> KILL x2 ...),
+    # so the last kill of a burst is about (last time a tag was seen) - Hold.
+    bf6 = @{ Name = 'Battlefield 6'; Folder = 'bf6'; Region = @(150, 380, 550, 200); Bright = 150; MinScore = 0.70; Fps = 5; Hold = 2.8 }
+}
+
+# Time of the last kill in a burst that started at $first and whose tags were last seen at $lastSeen.
+function Get-LastKill([double]$first, [double]$lastSeen, [string]$game = 'bf6') {
+    return [math]::Max($first, $lastSeen - $script:KillProfiles[$game].Hold)
 }
 $script:KillCacheFile = Join-Path $env:LOCALAPPDATA 'FragCut\kills-cache.json'
-$script:KillCacheVersion = 2     # bump when templates/settings change, so old results are not reused
+$script:KillCacheVersion = 3    # bump when templates/settings change, so old results are not reused
 
 # The matcher is C# (compiled on first use, ~1 s) so it is fast enough without extra software.
 function Initialize-KillScanner {
@@ -232,26 +239,38 @@ function Read-KillCache {
     } catch {}
     return ,$out
 }
+# Kill moments of a recording: .Times = when each burst's tags appeared (first kill), .Lasts = its last kill.
+# Returns $null if the recording hasn't been searched yet.
 function Get-CachedKills($video) {
     try {
         $key = Get-KillCacheKey $video
         foreach ($e in (Read-KillCache)) {
             if ($e.Key -eq $key) {
-                $t = New-Object System.Collections.ArrayList
+                $t = New-Object System.Collections.ArrayList; $l = New-Object System.Collections.ArrayList
                 foreach ($x in $e.Kills) { [void]$t.Add([double]$x) }
-                return ,([double[]]$t.ToArray())
+                foreach ($x in $e.Lasts) { [void]$l.Add([double]$x) }
+                return [pscustomobject]@{ Times = [double[]]$t.ToArray(); Lasts = [double[]]$l.ToArray() }
             }
         }
     } catch {}
     return $null
 }
-function Save-CachedKills($video, [double[]]$times) {
+# Same, from a scan (finished or still running)
+function Get-ScanKills($scanner, [string]$game = 'bf6') {
+    $k = $scanner.Snapshot()
+    return [pscustomobject]@{
+        Times = [double[]]@($k | ForEach-Object { $_.Time })
+        Lasts = [double[]]@($k | ForEach-Object { Get-LastKill $_.Time $_.LastSeen $game })
+    }
+}
+function Save-CachedKills($video, $kills) {
+    $times = @($kills.Times); $lasts = @($kills.Lasts)
     try {
         $key = Get-KillCacheKey $video
         $keep = New-Object System.Collections.ArrayList
         foreach ($e in (Read-KillCache)) { if ($e.Key -ne $key -and $e.Key -like "*|v$($script:KillCacheVersion)") { [void]$keep.Add($e) } }
         while ($keep.Count -ge 500) { $keep.RemoveAt(0) }                    # keep the 500 most recent recordings
-        [void]$keep.Add([pscustomobject]@{ Key = $key; Kills = @($times) })
+        [void]$keep.Add([pscustomobject]@{ Key = $key; Kills = @($times); Lasts = @($lasts) })
         New-Item -ItemType Directory -Force (Split-Path $script:KillCacheFile) | Out-Null
         ConvertTo-Json -InputObject $keep.ToArray() -Depth 4 | Set-Content -LiteralPath $script:KillCacheFile -Encoding UTF8
     } catch {}

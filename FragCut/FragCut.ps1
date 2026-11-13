@@ -121,6 +121,7 @@ $st = @{
     Speeds = @(0.25, 0.5, 1.0, 2.0, 4.0); SpeedIx = 2
     Scans = @{}                                        # video path -> running/finished kill scan
     Kills = $null                                      # kill times (s) of the current video, once known
+    KillLasts = $null                                  # per kill moment: time of its last kill (KILL x2 ...)
     KillIx = -1; KillClip = $null                      # last kill jumped to, and the part marked for it
 }
 
@@ -143,7 +144,8 @@ function Load-Video([int]$i) {
     # kills already found for this recording (this session or an earlier one)?
     $st.KillIx = -1; $st.KillClip = $null
     $sc = $st.Scans[$st.Video]
-    if ($sc) { $st.Kills = @($sc.Snapshot() | ForEach-Object { $_.Time }) } else { $st.Kills = Get-CachedKills $st.Video }
+    $info = if ($sc) { Get-ScanKills $sc } else { Get-CachedKills $st.Video }
+    if ($null -eq $info) { $st.Kills = $null; $st.KillLasts = $null } else { $st.Kills = $info.Times; $st.KillLasts = $info.Lasts }
     $ui.KillCanvas.Children.Clear(); Set-KillButton
     Save-LastFolder $st.Video
     $ui.TitleText.Text = ('[{0}/{1}]  {2}' -f ($i + 1), $queue.Count, (Split-Path $st.Video -Leaf))
@@ -351,7 +353,7 @@ function Find-Kills {
         $wh = (& $ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$v" | Select-Object -First 1).Split(',')
         $dur = if ($st.Dur -gt 0) { $st.Dur } else { Get-Duration $ffprobe $v }
         $st.Scans[$v] = Start-KillScan $ffmpeg $v $dur ([int]$wh[0]) ([int]$wh[1])
-        $st.Kills = @()
+        $st.Kills = @(); $st.KillLasts = @()
         $ui.MarkText.Text = 'Looking for kills - keep watching. Red marks appear on the timeline as they are found.'
     } catch {
         [System.Media.SystemSounds]::Beep.Play()
@@ -384,7 +386,8 @@ function Kill-Key([int]$dir) {
         return
     }
     $t = $k[$i]
-    $a = [math]::Max(0.0, $t - $KillBefore); $b = $t + $KillAfter
+    $last = if ($st.KillLasts -and $i -lt @($st.KillLasts).Count) { [math]::Max($t, $st.KillLasts[$i]) } else { $t }   # KILL x2 ...: up to the last kill
+    $a = [math]::Max(0.0, $t - $KillBefore); $b = $last + $KillAfter
     if ($st.Dur -gt 0) { $b = [math]::Min($b, $st.Dur) }
     $st.Start = $a; $st.End = $b; $st.KillIx = $i; $st.KillClip = @($a, $b)
     Start-Loop
@@ -397,16 +400,20 @@ function Check-Scans {
         if ($st.ScanDone[$v]) { continue }
         $sc = $st.Scans[$v]
         $done = $sc.Done
-        $times = @($sc.Snapshot() | ForEach-Object { $_.Time })
+        $info = Get-ScanKills $sc
+        $times = $info.Times
         $known = if ($null -eq $st.Kills) { -1 } else { @($st.Kills).Count }
-        if ($v -eq $st.Video -and $times.Count -ne $known) { $st.Kills = $times; Draw-KillTicks }
+        if ($v -eq $st.Video) {
+            $st.KillLasts = $info.Lasts
+            if ($times.Count -ne $known) { $st.Kills = $times; Draw-KillTicks }
+        }
         if ($done) {
             $st.ScanDone[$v] = $true
             if ($sc.Error) {
                 $st.Scans.Remove($v)
                 if ($v -eq $st.Video) { $st.Kills = $null; Draw-KillTicks; $ui.MarkText.Text = "Find kills failed: $($sc.Error)" }
             } else {
-                Save-CachedKills $v $times
+                Save-CachedKills $v $info
                 if ($v -eq $st.Video) {
                     $st.Kills = $times; Draw-KillTicks
                     $ui.MarkText.Text = if ($times.Count) { "Found $($times.Count) kill moments - press K to jump to them" } else { 'No kills found in this recording' }

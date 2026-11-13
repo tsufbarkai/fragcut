@@ -62,7 +62,7 @@ Press `K` (or **Find kills**). FragCut looks through the recording for the tags 
 
 After that, `K` jumps to the next kill and marks it: 8 seconds before the kill to 2 seconds after, playing on repeat. Adjust it with `Q W E R` if needed and press `Enter` to save it. `Shift+K` goes to the previous kill.
 
-Kills close together (a double kill, a squad wipe) count as one moment. FragCut remembers what it found, so opening the same recording again doesn't search it again.
+Kills close together (a double kill, a squad wipe) count as one moment, and its clip runs until 2 seconds after the last of them. FragCut remembers what it found, so opening the same recording again doesn't search it again.
 
 It only knows Battlefield 6 for now, and the recording has to be 16:9 (1080p, 1440p, 4K, 720p ...).
 
@@ -70,7 +70,7 @@ It only knows Battlefield 6 for now, and the recording has to be 16:9 (1080p, 14
 
 Select one or more recordings and choose **Send to → FragCut - Kill montage**. It finds the kills in each recording, takes 5 seconds before each kill and 1 second after, and joins all of them into one video named `<first recording> - kill montage.mp4`. Nothing to click in between; it shows its progress in a small window.
 
-Kills close together share one clip, so a double kill isn't repeated. If some recordings are 720p and others 1440p, the clips are scaled to the bigger size. Recordings that were already searched (with `K` or an earlier montage) aren't searched again.
+Kills close together share one clip, so a double kill isn't repeated or cut short: when KILL turns into KILL x2, the clip runs until 1 second after the last kill. If some recordings are 720p and others 1440p, the clips are scaled to the bigger size. Recordings that were already searched (with `K` or an earlier montage) aren't searched again.
 
 ### Joining clips
 
