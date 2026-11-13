@@ -1,91 +1,108 @@
 # FragCut
 
-**Cut the best moments out of your game recordings and stitch them into one video — right from the right-click menu.**
+FragCut is a small Windows tool for cutting clips out of game recordings and joining them into one video.
 
-Right-click a recording → **Send to → FragCut**. Watch it, press **I** at the start of the play and **O** at the end — the marked part loops so you can fine-tune it — then **Enter** to cut and keep watching. Do it for a few clips, press **J**, and you've got a montage. No timeline, no effects, no account, nothing running in the background.
+You open a recording from the right-click menu, watch it, mark where a clip starts and ends, and press Enter to save it. When you have a few clips, press J to join them.
 
-- **Mark while watching** — a small player with keyboard controls. Slices save in the background while you keep watching.
-- **One-key join** — stitch slices together in the order you choose. Slices from FragCut join **instantly with no quality loss**.
-- **Fast** — encodes on your graphics card (NVIDIA, AMD or Intel), falls back to the CPU.
-- **Tiny** — a few PowerShell scripts plus [ffmpeg](https://ffmpeg.org). Nothing to keep running, no tray icon, no telemetry.
-- Works with NVIDIA ShadowPlay / NVIDIA App, Xbox Game Bar, AMD ReLive, OBS and Steam recordings (any MP4/MKV ffmpeg can read).
+![FragCut: marking a part of a recording, adjusting it while it loops, and cutting it](docs/demo.gif)
 
-> Windows 10 / 11.
+It works with any MP4 or MKV recording (NVIDIA App / ShadowPlay, Xbox Game Bar, AMD ReLive, OBS, Steam). It uses [ffmpeg](https://ffmpeg.org) to do the actual cutting, and encodes on your graphics card if it can.
+
+Requires Windows 10 or 11.
 
 ## Install
 
 1. Download `FragCut-vX.Y.Z.zip` from [Releases](https://github.com/tsufbarkai/fragcut/releases/latest) and unzip it.
-2. Double-click **`Install.bat`**.
-   - *"Windows protected your PC"*: click **More info → Run anyway**. FragCut isn't code-signed (certificates cost money); the scripts are plain text — read them if you like.
-   - If [ffmpeg](https://ffmpeg.org) isn't installed, the installer offers to install it with `winget` (`Gyan.FFmpeg.Essentials`).
-3. Right-click a recording → **Send to → FragCut**.
-   On Windows 11, *Send to* is under **Show more options** (or **Shift + right-click**).
+2. Double-click `Install.bat`.
+   - If Windows shows "Windows protected your PC", click **More info** and then **Run anyway**. This appears because FragCut isn't code-signed.
+   - If ffmpeg isn't installed, the installer asks to install it for you (using `winget`).
+3. Right-click a recording and choose **Send to → FragCut**.
+   On Windows 11, *Send to* is under **Show more options**, or hold Shift while right-clicking.
 
-No admin rights needed. Installs to `%LOCALAPPDATA%\FragCut`.
+FragCut installs into `%LOCALAPPDATA%\FragCut` and doesn't need admin rights.
 
-## Use
+To update, download the new zip and run `Install.bat` again. Your clips and settings are kept.
 
-### FragCut — watch, mark, cut
+## Using FragCut
 
-| Key | Action |
+Right-click one or more recordings and choose **Send to → FragCut**. The video starts playing.
+
+To save a clip:
+
+1. Press `I` where the clip should start.
+2. Press `O` where it should end. That part now plays on repeat, so you can check it.
+3. If it's not quite right, move the start with `Q` / `W` and the end with `E` / `R`.
+4. Press `Enter` to save it. The video keeps playing, and the clip is saved in the background.
+
+Clips are saved next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** if you also want the audio as a separate file.
+
+All keys:
+
+| Key | What it does |
 |---|---|
 | `Space` | play / pause |
-| `←` / `→` | back / forward 0.5 s (`Shift` = 5 s, `Ctrl` = 30 s) |
+| `←` / `→` | back / forward 0.5 s (with `Shift`: 5 s, with `Ctrl`: 30 s) |
 | `,` / `.` | one frame back / forward |
-| `I` | mark start |
-| `O` | mark end — the marked part now **loops** |
-| `Q` / `W` | move the start earlier / later (0.2 s, `Shift` = 1 s) |
-| `E` / `R` | move the end earlier / later (0.2 s, `Shift` = 1 s) |
-| `Enter` or `C` | cut the slice and keep watching (only a start marked = cut up to the current position) |
+| `I` / `O` | mark start / mark end |
+| `Q` / `W` | move the start earlier / later by 0.2 s (with `Shift`: 1 s) |
+| `E` / `R` | move the end earlier / later by 0.2 s (with `Shift`: 1 s) |
+| `Enter` or `C` | save the clip (if only a start is marked, it cuts up to the current position) |
 | `Esc` | clear the marks |
+| `J` | join the clips you saved |
 | `P` / `N` | previous / next recording |
-| `J` | join the slices you cut |
-| `↑` / `↓` | playback speed: 0.25x · 0.5x · 1x · 2x · 4x |
+| `↑` / `↓` | playback speed (0.25x to 4x) |
 | `+` / `-` | volume |
 
-The flow: **I → O** (it loops) → tweak with **Q W E R** → **Enter**. Marking again with I/O just replaces the marks.
+You can also click the timeline to jump to a spot, or drag it. If you opened several recordings, they're listed on the right; click one to switch.
 
-Click anywhere on the timeline to jump there, or drag it (the video pauses and goes silent while you drag). Opened several recordings? They're listed on the right — click one to switch.
+### Joining clips
 
-Slices are saved next to the recording as `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** to get the audio too.
+Press `J` in FragCut, or select clips in Explorer and choose **Send to → FragCut - Join clips**.
 
-### Join clips
+It lists the clips in the order they were recorded. Press Enter to keep that order, or type a different one, like `3 1 2` (leave a number out to skip that clip). The result is saved as `<first recording> - montage.mp4`.
 
-Press `J` in FragCut, or select clips → **Send to → FragCut - Join clips**. It lists them in recording order; press Enter or type a new order (`3 1 2`, leave numbers out to skip). Clips in the same format are joined losslessly in a second; mixed resolutions/frame rates are re-encoded automatically. Output: `<first recording> - montage.mp4`.
+Clips made by FragCut are joined without re-encoding, so it takes a second and the quality doesn't change. Clips with different resolutions or frame rates are re-encoded so they fit together.
 
-### Cut by time
+### Cutting by typed times
 
-Know the timestamps already? **Send to → FragCut - Cut by time**, type `1:38` and `1:43`. Saves an MP4 and an MP3.
+If you already know the times, choose **Send to → FragCut - Cut by time** and type the start and end, for example `1:38` and `1:43`. It saves an MP4 and an MP3.
 
-### Compress
+### Making a video smaller
 
-Montage too big to send? Select videos → **Send to → FragCut - Compress**. You get `<name> - compressed.mp4`, about half the size and hard to tell apart from the original (H.264, so it plays everywhere). The original is left alone.
+Select one or more videos and choose **Send to → FragCut - Compress**. It saves a copy named `<name> - compressed.mp4`, usually about half the size, and leaves the original as it is. The quality drop is small. In a test on a 1440p game montage it was hard to notice while watching.
 
-## FAQ
+## Questions
 
-**The video is black / won't play.** It's probably HEVC (H.265) or AV1. Install *HEVC Video Extensions* or *AV1 Video Extension* from the Microsoft Store, or record in H.264. (Cutting still works — only the preview needs the codec.)
+**The video is black or won't play.**
+The recording is probably HEVC (H.265) or AV1. Install *HEVC Video Extensions* or *AV1 Video Extension* from the Microsoft Store, or set your recorder to H.264. Cutting still works without them; only the preview needs them.
 
-**Which encoder is used?** The first one that works on your PC: NVIDIA NVENC → AMD AMF → Intel Quick Sync → CPU (x264). The FragCut window title shows it.
+**Does it use my graphics card?**
+Yes, if it can: NVIDIA, then AMD, then Intel. If none of them work, it uses the CPU, which is slower. The window title shows which one is used.
 
-**Recording FragCut with OBS?** FragCut notices OBS is open and cuts slices gently (paced, lighter GPU preset), because both share the graphics card's video encoder. Slices take a moment longer to save; your OBS recording doesn't drop frames.
+**I'm recording FragCut with OBS and the recording stutters when I save a clip.**
+OBS and FragCut use the same video encoder on the graphics card. When FragCut sees that OBS is open, it saves clips more slowly so OBS has room. Saving takes a little longer while OBS is open.
 
-**Does it upload anything?** No. Everything runs locally with ffmpeg.
+**Does it upload anything?**
+No. Everything happens on your PC.
 
-**Uninstall?** Run `Uninstall.bat` (in the zip or in `%LOCALAPPDATA%\FragCut`). Your clips stay.
+**How do I uninstall it?**
+Run `Uninstall.bat` (it's in the zip and in `%LOCALAPPDATA%\FragCut`). Your clips are not deleted.
 
 ## How it works
 
-PowerShell + WPF for the player (Windows' built-in media engine), ffmpeg for cutting and joining. Slices are encoded with fixed settings (H.264 + AAC 48 kHz stereo), which is what lets the joiner use ffmpeg's concat demuxer with stream copy instead of re-encoding.
+FragCut is a few PowerShell scripts. The player window uses WPF and Windows' built-in video playback. ffmpeg does the cutting, joining and compressing.
 
-| File | What it is |
+Every clip is encoded with the same settings (H.264 video, AAC 48 kHz stereo audio). That's why clips can be joined without re-encoding.
+
+| File | What it does |
 |---|---|
-| `FragCut.ps1` | the player: mark & cut |
+| `FragCut.ps1` | the player: watch, mark, cut |
 | `Join.ps1` | join clips |
 | `TimeCut.ps1` | cut by typed times |
-| `Compress.ps1` | smaller copy of a video (H.264, GPU-encoded) |
-| `Core.ps1` | shared helpers (encoder detection, naming, ffmpeg args) |
-| `Install.ps1` / `Uninstall.ps1` | add / remove the Send to + Desktop shortcuts |
+| `Compress.ps1` | make a smaller copy of a video |
+| `Core.ps1` | shared code (encoder detection, file names, ffmpeg settings) |
+| `Install.ps1` / `Uninstall.ps1` | add / remove the Send to and Desktop shortcuts |
 
 ## License
 
-[MIT](LICENSE). ffmpeg is not included; it's installed separately and is licensed under the LGPL/GPL.
+[MIT](LICENSE). ffmpeg isn't included. It's installed separately and has its own license (LGPL/GPL).
