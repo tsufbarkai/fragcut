@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.0
+
+- **Find kills (Battlefield 6)**: press `K` in FragCut. It looks through the recording for the game's kill tags
+  (KILL, HEADSHOT, KILL CONFIRMED) and marks each kill on the timeline. Then `K` jumps to the next kill and marks
+  8 seconds before it to 2 seconds after, ready to save with `Enter`; `Shift+K` goes back. It runs in the background
+  while you watch (a 2-minute 1440p recording takes about 11 s) and remembers the results.
+  Works with 16:9 recordings at any resolution.
+
 ## 1.2.1
 
 - **Plays nice with OBS**: while OBS is open, slices are cut gently (lighter GPU preset, paced to 1.5x real time,

@@ -33,6 +33,7 @@ Slices save in the background (next to the recording) while you keep watching.
   Esc .............. clear the marks
   P / N ............ previous / next recording
   J ................ join the slices you cut into one video
+  K ................ find kills (Battlefield 6), then jump to the next kill   (Shift+K = previous)
   Up / Down ........ playback speed: 0.25x, 0.5x, 1x, 2x, 4x
   + / - ............ volume
 
@@ -41,6 +42,14 @@ Slices save in the background (next to the recording) while you keep watching.
   "Also save MP3" = also save the sound of each slice as an MP3.
   The orange bar above the timeline shows the marked part.
   Slices are named like:  <recording> - clip 01m38-01m43.mp4
+
+
+FIND KILLS - Battlefield 6
+-------------------------
+Press K. FragCut looks for the KILL / HEADSHOT / KILL CONFIRMED tags and puts a red mark on the
+timeline for each kill (you can keep watching; a 2-minute recording takes about 10 seconds).
+Then K jumps to the next kill and marks 8 s before it to 2 s after, on repeat. Enter saves it.
+Shift+K goes back. Results are remembered. Needs a 16:9 recording and the default HUD.
 
 
 JOIN CLIPS - stitch slices together

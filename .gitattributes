@@ -2,3 +2,4 @@
 *.bat text eol=crlf
 *.txt text eol=crlf
 *.md text eol=lf
+*.pgm binary

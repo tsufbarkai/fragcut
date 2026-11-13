@@ -49,11 +49,22 @@ All keys:
 | `Enter` or `C` | save the clip (if only a start is marked, it cuts up to the current position) |
 | `Esc` | clear the marks |
 | `J` | join the clips you saved |
+| `K` | find kills (Battlefield 6), then jump to the next kill (`Shift+K`: previous) |
 | `P` / `N` | previous / next recording |
 | `↑` / `↓` | playback speed (0.25x to 4x) |
 | `+` / `-` | volume |
 
 You can also click the timeline to jump to a spot, or drag it. If you opened several recordings, they're listed on the right; click one to switch.
+
+### Finding kills (Battlefield 6)
+
+Press `K` (or **Find kills**). FragCut looks through the recording for the tags Battlefield 6 shows when you get a kill (KILL, HEADSHOT, KILL CONFIRMED) and puts a red mark on the timeline for each one. You can keep watching while it looks; a 2-minute recording takes about 10 seconds.
+
+After that, `K` jumps to the next kill and marks it: 8 seconds before the kill to 2 seconds after, playing on repeat. Adjust it with `Q W E R` if needed and press `Enter` to save it. `Shift+K` goes to the previous kill.
+
+Kills close together (a double kill, a squad wipe) count as one moment. FragCut remembers what it found, so opening the same recording again doesn't search it again.
+
+It only knows Battlefield 6 for now, and the recording has to be 16:9 (1080p, 1440p, 4K, 720p ...).
 
 ### Joining clips
 
@@ -82,6 +93,9 @@ Yes, if it can: NVIDIA, then AMD, then Intel. If none of them work, it uses the 
 **Why does saving a clip take longer when OBS is open?**
 OBS and FragCut use the same video encoder on the graphics card. If FragCut saved at full speed, an OBS recording running at the same time could stutter. So while OBS is open, FragCut saves clips more slowly to leave room for it.
 
+**Find kills misses kills or finds none.**
+It recognizes the white KILL / HEADSHOT / KILL CONFIRMED tags that appear left of and below the crosshair, so it needs those on screen: the default HUD layout and size, a 16:9 recording, and Battlefield 6. Kills you see while spectating a teammate are found too, since the game shows their tags.
+
 **Does it upload anything?**
 No. Everything happens on your PC.
 
@@ -100,6 +114,9 @@ Every clip is encoded with the same settings (H.264 video, AAC 48 kHz stereo aud
 | `Join.ps1` | join clips |
 | `TimeCut.ps1` | cut by typed times |
 | `Compress.ps1` | make a smaller copy of a video |
+| `Kills.ps1` | find kills: ffmpeg reads the tag area 5 times a second, a small C# matcher compares it with the pictures in `kills\` |
+| `KillScan.ps1` | list the kills in recordings from the command line |
+| `kills\bf6\` | pictures of the Battlefield 6 kill tags |
 | `Core.ps1` | shared code (encoder detection, file names, ffmpeg settings) |
 | `Install.ps1` / `Uninstall.ps1` | add / remove the Send to and Desktop shortcuts |
 

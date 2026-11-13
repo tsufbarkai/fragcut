@@ -12,13 +12,17 @@ try {
 
     # 1) copy the tools
     New-Item -ItemType Directory -Force $Dest | Out-Null
-    $files = 'Core.ps1','FragCut.ps1','Join.ps1','Join.bat','TimeCut.ps1','TimeCut.bat','Compress.ps1','Compress.bat','Uninstall.ps1','Uninstall.bat','Quick Guide.txt'
+    $files = 'Core.ps1','FragCut.ps1','Join.ps1','Join.bat','TimeCut.ps1','TimeCut.bat','Compress.ps1','Compress.bat','Kills.ps1','KillScan.ps1','Uninstall.ps1','Uninstall.bat','Quick Guide.txt'
     foreach ($f in $files) {
         $src = Join-Path $PSScriptRoot $f
         if (-not (Test-Path -LiteralPath $src)) { throw "missing file in the package: $f (unzip the whole folder first)" }
         if ((Resolve-Path -LiteralPath $src).Path -ne (Join-Path (Resolve-Path -LiteralPath $Dest).Path $f)) { Copy-Item -LiteralPath $src -Destination $Dest -Force }
     }
-    Get-ChildItem $Dest | Unblock-File -ErrorAction SilentlyContinue   # remove the "downloaded from the internet" flag
+    # pictures of each game's kill tags (used by "Find kills")
+    $kills = Join-Path $PSScriptRoot 'kills'
+    if (-not (Test-Path -LiteralPath $kills)) { throw "missing folder in the package: kills (unzip the whole folder first)" }
+    if ((Resolve-Path -LiteralPath $kills).Path -ne (Join-Path (Resolve-Path -LiteralPath $Dest).Path 'kills')) { Copy-Item -LiteralPath $kills -Destination $Dest -Recurse -Force }
+    Get-ChildItem $Dest -Recurse -File | Unblock-File -ErrorAction SilentlyContinue   # remove the "downloaded from the internet" flag
     Write-Host '  files copied' -ForegroundColor Green
 
     # 2) ffmpeg (the free video engine that does the actual cutting/joining)

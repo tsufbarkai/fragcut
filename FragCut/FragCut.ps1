@@ -8,13 +8,15 @@
 #        Enter or C  cut the slice and keep watching     Esc  clear the marks
 #        P / N  previous / next recording   J  join the slices cut in this window
 #        Up/Down  playback speed (0.25x 0.5x 1x 2x 4x)     + / -  volume
+#        K  find kills (Battlefield 6), then jump to the next kill and mark it   Shift+K  previous kill
 # Slices are saved next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
 
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest)
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
+. (Join-Path $PSScriptRoot 'Kills.ps1')
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
 
 function Fail($msg) { [System.Windows.MessageBox]::Show($msg, 'FragCut', 'OK', 'Error') | Out-Null; exit 1 }
@@ -65,6 +67,7 @@ if ($queue.Count -eq 0) { exit }
     <Canvas x:Name="RangeCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0">
       <Rectangle x:Name="RangeRect" Height="8" Fill="#f0a020" Width="0"/>
     </Canvas>
+    <Canvas x:Name="KillCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0" IsHitTestVisible="False"/>
     <Slider x:Name="Seek" Grid.Row="3" Minimum="0" Maximum="1" Focusable="False" Margin="0,2,0,0" Cursor="Hand"/>
     <DockPanel Grid.Row="4" Margin="0,8,0,0" LastChildFill="True">
       <TextBlock x:Name="TimeText" DockPanel.Dock="Left" FontFamily="Consolas" FontSize="18" VerticalAlignment="Center" Width="290"/>
@@ -81,6 +84,7 @@ if ($queue.Count -eq 0) { exit }
       <Button x:Name="BtnClear" Content="Clear [Esc]"/>
       <Button x:Name="BtnCut"   Content="Cut slice [Enter]" Background="#3b5bdb"/>
       <Button x:Name="BtnJoin"  Content="Join slices [J]" Background="#2f9e44"/>
+      <Button x:Name="BtnKills" Content="Find kills [K]" Background="#a61e4d" ToolTip="Battlefield 6: finds the kills in this recording. Then K = next kill, Shift+K = previous."/>
       <CheckBox x:Name="ChkMp3" Content="Also save MP3" VerticalAlignment="Center" Margin="6,0,0,6"/>
     </WrapPanel>
     <ListBox x:Name="Slices" Grid.Row="6" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False" FontFamily="Consolas"/>
@@ -102,7 +106,7 @@ if ($queue.Count -eq 0) { exit }
 
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 $ui = @{}
-foreach ($n in 'TitleText','Player','RangeCanvas','RangeRect','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','ChkMp3','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
+foreach ($n in 'TitleText','Player','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
 
 $st = @{
     Index = -1; Video = $null; Dur = 0.0; Playing = $false
@@ -115,6 +119,9 @@ $st = @{
     Enc = (Get-Encoder $ffmpeg)
     SyncingList = $false
     Speeds = @(0.25, 0.5, 1.0, 2.0, 4.0); SpeedIx = 2
+    Scans = @{}                                        # video path -> running/finished kill scan
+    Kills = $null                                      # kill times (s) of the current video, once known
+    KillIx = -1; KillClip = $null                      # last kill jumped to, and the part marked for it
 }
 
 function Set-Status($i, $text) { $ui.Slices.Items[$i] = $text }
@@ -133,6 +140,11 @@ function Refresh-Videos {
 function Load-Video([int]$i) {
     if ($i -lt 0 -or $i -ge $queue.Count) { return }
     $st.Index = $i; $st.Video = $queue[$i]; $st.Start = $null; $st.End = $null; $st.Dur = 0
+    # kills already found for this recording (this session or an earlier one)?
+    $st.KillIx = -1; $st.KillClip = $null
+    $sc = $st.Scans[$st.Video]
+    if ($sc) { $st.Kills = @($sc.Snapshot() | ForEach-Object { $_.Time }) } else { $st.Kills = Get-CachedKills $st.Video }
+    $ui.KillCanvas.Children.Clear(); Set-KillButton
     Save-LastFolder $st.Video
     $ui.TitleText.Text = ('[{0}/{1}]  {2}' -f ($i + 1), $queue.Count, (Split-Path $st.Video -Leaf))
     $ui.Player.Source = New-Object Uri($st.Video)
@@ -300,6 +312,111 @@ function Join-Slices {
 function Next-Video { if ($st.Index + 1 -lt $queue.Count) { Load-Video ($st.Index + 1) } else { $ui.MarkText.Text = 'That was the last recording - use "Add..." for more' } }
 function Prev-Video { if ($st.Index -gt 0) { Load-Video ($st.Index - 1) } else { $ui.MarkText.Text = 'This is the first recording' } }
 
+# ---------- kills (Battlefield 6): find them, mark them on the timeline, jump between them ----------
+$KillBefore = 8.0; $KillAfter = 2.0          # clip around a kill: 8 s before its tag appears, 2 s after
+$st.ScanDone = @{}                            # video path -> results handled
+$killBrush = New-Object Windows.Media.SolidColorBrush ([Windows.Media.Color]::FromRgb(255, 77, 77))
+
+function On-KillClip { ($st.KillIx -ge 0) -and $st.KillClip -and ($st.Start -eq $st.KillClip[0]) -and ($st.End -eq $st.KillClip[1]) }
+
+function Draw-KillTicks {
+    $ui.KillCanvas.Children.Clear()
+    $w = $ui.KillCanvas.ActualWidth
+    if (-not $st.Kills -or $st.Dur -le 0 -or $w -le 0) { return }
+    foreach ($t in $st.Kills) {
+        $r = New-Object Windows.Shapes.Rectangle
+        $r.Width = 3; $r.Height = 8; $r.Fill = $killBrush
+        [Windows.Controls.Canvas]::SetLeft($r, [math]::Max(0.0, $w * $t / $st.Dur - 1.5))
+        [void]$ui.KillCanvas.Children.Add($r)
+    }
+}
+
+function Set-KillButton {
+    $sc = $st.Scans[$st.Video]
+    $n = if ($null -eq $st.Kills) { 0 } else { @($st.Kills).Count }
+    if ($sc -and -not $sc.Done) {
+        $txt = 'Finding kills {0:N0}%' -f ($sc.Progress * 100)
+        if ($n) { $txt += "  ($n so far)" }
+    }
+    elseif ($null -eq $st.Kills) { $txt = 'Find kills [K]' }
+    elseif ($n -eq 0)            { $txt = 'No kills found' }
+    elseif (On-KillClip)         { $txt = 'Kill {0} of {1}  [K next, Shift+K back]' -f ($st.KillIx + 1), $n }
+    else                         { $txt = "$n kills - next [K]" }
+    if ([string]$ui.BtnKills.Content -ne $txt) { $ui.BtnKills.Content = $txt }
+}
+
+function Find-Kills {
+    $v = $st.Video
+    try {
+        $wh = (& $ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$v" | Select-Object -First 1).Split(',')
+        $dur = if ($st.Dur -gt 0) { $st.Dur } else { Get-Duration $ffprobe $v }
+        $st.Scans[$v] = Start-KillScan $ffmpeg $v $dur ([int]$wh[0]) ([int]$wh[1])
+        $st.Kills = @()
+        $ui.MarkText.Text = 'Looking for kills - keep watching. Red marks appear on the timeline as they are found.'
+    } catch {
+        [System.Media.SystemSounds]::Beep.Play()
+        $ui.MarkText.Text = "Find kills: $($_.Exception.Message)"
+    }
+    Set-KillButton
+}
+
+# K: find the kills first; after that, jump to the next one (Shift+K: previous) and mark its clip, looping.
+function Kill-Key([int]$dir) {
+    if (-not $st.Video) { return }
+    if ($null -eq $st.Kills) { Find-Kills; return }
+    $k = @($st.Kills)
+    $sc = $st.Scans[$st.Video]; $running = $sc -and -not $sc.Done
+    if ($k.Count -eq 0) {
+        [System.Media.SystemSounds]::Beep.Play()
+        $ui.MarkText.Text = if ($running) { 'Still looking for kills...' } else { 'No kills found in this recording' }
+        return
+    }
+    if (On-KillClip) { $i = $st.KillIx + $dir }
+    else {
+        $p = Base-Pos
+        if ($dir -gt 0) { $i = 0; while ($i -lt $k.Count -and $k[$i] + $KillAfter -le $p + 0.05) { $i++ } }
+        else { $i = $k.Count - 1; while ($i -ge 0 -and $k[$i] + $KillAfter -ge $p - 0.05) { $i-- } }
+    }
+    if ($i -lt 0) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'No earlier kill'; return }
+    if ($i -ge $k.Count) {
+        [System.Media.SystemSounds]::Beep.Play()
+        $ui.MarkText.Text = if ($running) { 'No later kill found yet - still looking...' } else { 'That was the last kill' }
+        return
+    }
+    $t = $k[$i]
+    $a = [math]::Max(0.0, $t - $KillBefore); $b = $t + $KillAfter
+    if ($st.Dur -gt 0) { $b = [math]::Min($b, $st.Dur) }
+    $st.Start = $a; $st.End = $b; $st.KillIx = $i; $st.KillClip = @($a, $b)
+    Start-Loop
+    Set-KillButton
+}
+
+# timer: pick up new results, save finished ones
+function Check-Scans {
+    foreach ($v in @($st.Scans.Keys)) {
+        if ($st.ScanDone[$v]) { continue }
+        $sc = $st.Scans[$v]
+        $done = $sc.Done
+        $times = @($sc.Snapshot() | ForEach-Object { $_.Time })
+        $known = if ($null -eq $st.Kills) { -1 } else { @($st.Kills).Count }
+        if ($v -eq $st.Video -and $times.Count -ne $known) { $st.Kills = $times; Draw-KillTicks }
+        if ($done) {
+            $st.ScanDone[$v] = $true
+            if ($sc.Error) {
+                $st.Scans.Remove($v)
+                if ($v -eq $st.Video) { $st.Kills = $null; Draw-KillTicks; $ui.MarkText.Text = "Find kills failed: $($sc.Error)" }
+            } else {
+                Save-CachedKills $v $times
+                if ($v -eq $st.Video) {
+                    $st.Kills = $times; Draw-KillTicks
+                    $ui.MarkText.Text = if ($times.Count) { "Found $($times.Count) kill moments - press K to jump to them" } else { 'No kills found in this recording' }
+                }
+            }
+        }
+    }
+    if ($st.Video) { Set-KillButton }
+}
+
 # ---------- timeline: click to jump, drag to scrub (paused + muted while dragging) ----------
 function Value-At([double]$x) {
     # x = position on the timeline track; the thumb's centre covers [half thumb .. width - half thumb]
@@ -349,6 +466,7 @@ $ui.Player.Add_MediaOpened({
     $st.Dur = $d
     $ui.Seek.Maximum = [math]::Max(0.1, $st.Dur)
     Update-Marks
+    Draw-KillTicks
 })
 $ui.Player.Add_MediaEnded({ if (Looping) { Seek-To $st.Start; Play } else { Pause-Video } })
 $ui.Player.Add_MediaFailed({ param($s, $e) $ui.MarkText.Text = "Can't play this file: $($e.ErrorException.Message)" })
@@ -360,6 +478,7 @@ $ui.BtnEnd.Add_Click({ Mark-End })
 $ui.BtnClear.Add_Click({ Clear-Marks })
 $ui.BtnCut.Add_Click({ Cut-Slice })
 $ui.BtnJoin.Add_Click({ Join-Slices })
+$ui.BtnKills.Add_Click({ Kill-Key 1 })
 $ui.BtnNext.Add_Click({ Next-Video })
 $ui.BtnPrev.Add_Click({ Prev-Video })
 $ui.BtnOpen.Add_Click({
@@ -395,6 +514,7 @@ $win.Add_PreviewKeyDown({
         'N'          { Next-Video }
         'P'          { Prev-Video }
         'J'          { Join-Slices }
+        'K'          { Kill-Key $(if ($shift) { -1 } else { 1 }) }
         'Up'         { Change-Speed 1 }
         'Down'       { Change-Speed -1 }
         { $_ -in 'OemPlus','Add' }       { $ui.Vol.Value = [math]::Min(1.0, $ui.Vol.Value + 0.05) }
@@ -416,10 +536,11 @@ $timer.Add_Tick({
         $ui.TimeText.Text = '{0} / {1}{2}' -f (Short $p), (Short $st.Dur), (Speed-Text)
         if ($null -ne $st.Start -and $null -eq $st.End) { Update-Marks }
         Check-Jobs
+        Check-Scans
     } catch {}
 })
 
-$win.Add_SizeChanged({ Update-Marks })
+$win.Add_SizeChanged({ Update-Marks; Draw-KillTicks })
 $win.Add_Closing({
     param($s, $e)
     if ($st.Running -or $st.Jobs.Count) {
@@ -427,6 +548,7 @@ $win.Add_Closing({
         if ($r -ne 'Yes') { $e.Cancel = $true; return }
         try { if ($st.Running) { $st.Running.Proc.Kill() } } catch {}
     }
+    foreach ($sc in @($st.Scans.Values)) { if (-not $sc.Done) { $sc.Cancel() } }    # unfinished kill scans
     $timer.Stop(); $ui.Player.Stop(); $ui.Player.Close()
 })
 
@@ -463,6 +585,39 @@ if ($SelfTest) {
         if ($k -gt 160) { Write-Host 'SELFTEST timeout'; $tt.Stop(); $win.Close() }
     })
     $win.Add_ContentRendered({ $tt.Start() })
+}
+
+if ($KillTest) {
+    # automated check of Find kills: K (scan), then K, K, Shift+K; prints what happened, then closes
+    $script:kstep = 0; $script:klog = New-Object System.Collections.ArrayList; $script:kphase = 0
+    $kt = New-Object Windows.Threading.DispatcherTimer
+    $kt.Interval = [TimeSpan]::FromMilliseconds(250)
+    $kt.Add_Tick({
+        $script:kstep++
+        function L($m) { [void]$script:klog.Add($m) }
+        function Marks { '{0}-{1} ix={2} button="{3}"' -f $(if ($null -ne $st.Start) { Short $st.Start } else { '--' }), $(if ($null -ne $st.End) { Short $st.End } else { '--' }), $st.KillIx, $ui.BtnKills.Content }
+        if ($script:kstep -eq 4) {
+            L ("at start: kills known = {0}, button=""{1}""" -f $(if ($null -eq $st.Kills) { 'no' } else { "yes ($(@($st.Kills).Count), from cache)" }), $ui.BtnKills.Content)
+            Kill-Key 1; L ("K -> button=""{0}""  text=""{1}""" -f $ui.BtnKills.Content, $ui.MarkText.Text)
+            $script:kphase = 1; $script:kt0 = [datetime]::Now
+        }
+        if ($script:kphase -eq 1 -and ($st.ScanDone[$st.Video] -or -not $st.Scans.ContainsKey($st.Video))) {
+            $sc = $st.Scans[$st.Video]
+            if ($sc) { L ("scan finished in {0:N0} s, {1} frames" -f ([datetime]::Now - $script:kt0).TotalSeconds, $sc.Frames) }
+            L ("kills: " + (@($st.Kills | ForEach-Object { Short $_ }) -join ', '))
+            L ("timeline marks drawn: {0}" -f $ui.KillCanvas.Children.Count)
+            Kill-Key 1;  L ("K       -> " + (Marks))
+            Kill-Key 1;  L ("K       -> " + (Marks))
+            Kill-Key -1; L ("Shift+K -> " + (Marks))
+            $script:kphase = 2; $script:kpos = $script:kstep
+        }
+        if ($script:kphase -eq 2 -and $script:kstep -eq $script:kpos + 8) {
+            L ("looping: pos={0} within {1}-{2}: {3}" -f (Short (Pos)), (Short $st.Start), (Short $st.End), ((Pos) -ge $st.Start - 0.1 -and (Pos) -le $st.End + 0.1))
+            Write-Host ("KILLTEST`n  " + ($script:klog -join "`n  ")); $kt.Stop(); $win.Close()
+        }
+        if ($script:kstep -gt 480) { Write-Host ("KILLTEST timeout`n  " + ($script:klog -join "`n  ")); $kt.Stop(); $win.Close() }
+    })
+    $win.Add_ContentRendered({ $kt.Start() })
 }
 
 $win.Add_Loaded({ Set-Title; Load-Video 0; $timer.Start() })
