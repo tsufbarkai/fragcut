@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.1
+
+- **Plays recordings Windows can't**: some recordings (for example AV1 from newer NVIDIA or AMD cards) failed with
+  "Can't play this file: Exception from HRESULT: 0xC00D11B1", even with Microsoft's AV1 extension installed.
+  FragCut now makes a playable copy (H.264, up to 1080p) and plays that. It takes a few seconds for a short clip
+  and is made once per recording (the 8 newest are kept). Cuts, Find kills and joins still use the original file.
+
 ## 1.4.0
 
 - **Kill montage (Battlefield 6)**: select recordings > *Send to > FragCut - Kill montage*. It finds the kills in each one,

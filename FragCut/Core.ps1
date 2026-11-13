@@ -1,7 +1,7 @@
 ﻿# FragCut - shared helpers (dot-sourced by FragCut.ps1, Join.ps1, TimeCut.ps1, Compress.ps1 and KillScan.ps1).
 # https://github.com/tsufbarkai/fragcut
 
-$FragCutVersion = '1.4.0'
+$FragCutVersion = '1.4.1'
 $script:Inv = [Globalization.CultureInfo]::InvariantCulture
 $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'FragCut\settings.json'
 
@@ -140,6 +140,55 @@ function Get-CutArgs($video, [double]$start, [double]$len, $mp4, [string]$enc, [
     $a += Get-VideoEncArgs $enc -Gentle:$Gentle
     $a += @('-pix_fmt','yuv420p','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-movflags','+faststart',$mp4)
     return $a
+}
+
+# ---------- preview copy ----------
+# FragCut's player is Windows' built-in one, which can't play some recordings (AV1, HEVC without its extension ...).
+# Then FragCut plays an H.264 copy instead (at most 1080p, same frame rate). Cuts, kill search and joins still use the original.
+$script:PreviewDir = Join-Path $env:LOCALAPPDATA 'FragCut\preview'
+$script:PreviewKeep = 8          # previews kept (newest first)
+
+function Get-PreviewPath($video) {
+    $f = Get-Item -LiteralPath $video
+    $key = '{0}|{1}|{2}' -f $f.FullName.ToLowerInvariant(), $f.Length, $f.LastWriteTimeUtc.Ticks
+    $md5 = [Security.Cryptography.MD5]::Create()
+    $h = -join ($md5.ComputeHash([Text.Encoding]::UTF8.GetBytes($key))[0..7] | ForEach-Object { $_.ToString('x2') })
+    return Join-Path $script:PreviewDir "$h.mp4"
+}
+
+# $info: codec, width, height (ffprobe). $mode: 0 = all on the NVIDIA GPU (decode, scale, encode), 1 = GPU decode via DirectX
+# (any GPU), 2 = CPU only. Tried in that order. ffmpeg's default AV1 decoder (libaom) is very slow and can't use the GPU,
+# so for AV1 its own decoder is named in modes 0 and 1.
+function Get-PreviewArgs($video, $out, [string]$enc, $progress, $info, [int]$mode) {
+    if ($mode -eq 2) { $enc = 'libx264' }
+    $w = [int]$info.Width; $h = [int]$info.Height
+    $scale = $h -gt 1080 -and $w -gt 0
+    if ($scale) { $w = [int]([math]::Round($w * 1080.0 / $h / 2) * 2); $h = 1080 }
+    $a = @('-hide_banner','-loglevel','error','-nostats','-y','-progress',$progress)
+    if ($mode -eq 0) { $a += @('-hwaccel','cuda','-hwaccel_output_format','cuda') }
+    if ($mode -eq 1) { $a += @('-hwaccel','d3d11va') }
+    if ($mode -lt 2 -and $info.Codec -eq 'av1') { $a += @('-c:v','av1') }
+    $a += @('-i',$video,'-map','0:v:0','-map','0:a:0?')
+    if ($mode -eq 0) { if ($scale) { $a += @('-vf',"scale_cuda=${w}:${h}:interp_algo=bilinear") } }
+    elseif ($scale)  { $a += @('-vf',"scale=${w}:${h}:flags=bilinear",'-pix_fmt','yuv420p') }
+    else             { $a += @('-pix_fmt','yuv420p') }
+    $v = switch ($enc) {
+        'h264_nvenc' { @('-c:v','h264_nvenc','-preset','p1','-rc','vbr','-cq','28','-b:v','6M','-maxrate','10M','-bufsize','20M') }
+        'h264_amf'   { @('-c:v','h264_amf','-quality','speed','-rc','vbr_peak','-b:v','6M','-maxrate','10M') }
+        'h264_qsv'   { @('-c:v','h264_qsv','-preset','veryfast','-b:v','6M','-maxrate','10M') }
+        default      { @('-c:v','libx264','-preset','veryfast','-crf','26','-maxrate','10M','-bufsize','20M') }
+    }
+    $a += $v
+    $a += @('-g','30','-bf','0','-c:a','aac','-b:a','160k','-ar','48000','-ac','2','-movflags','+faststart','-f','mp4',$out)
+    return $a
+}
+
+# keep only the newest previews
+function Remove-OldPreviews {
+    try {
+        Get-ChildItem -LiteralPath $script:PreviewDir -Filter '*.mp4' -ErrorAction Stop | Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip $script:PreviewKeep | Remove-Item -Force -ErrorAction SilentlyContinue
+    } catch {}
 }
 
 function Get-Mp3Args($video, [double]$start, [double]$len, $mp3) {

@@ -85,8 +85,9 @@ GOOD TO KNOW
 ------------
 - Encoding uses your graphics card when it can (NVIDIA, AMD or Intel), otherwise the CPU (slower, same result).
   The window title shows which one is used.
-- Video black / won't play in FragCut?  It's probably HEVC/H.265 or AV1: install "HEVC Video Extensions"
-  or "AV1 Video Extension" from the Microsoft Store, or record in H.264.
+- "Making a preview copy" when opening a recording?  Windows' player can't play it (often AV1 or HEVC/H.265),
+  so FragCut makes an H.264 copy to play, once per recording. Clips are still cut from the original.
+  Record in H.264 to skip this.
 - OBS open?  Slices are cut gently so OBS recordings don't stutter (they take a moment longer to save).
 - Nothing is uploaded anywhere. Everything runs on your PC.
 - Manual ffmpeg install: open PowerShell and run   winget install Gyan.FFmpeg.Essentials   then reopen FragCut.

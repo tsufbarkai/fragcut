@@ -12,7 +12,7 @@
 # Slices are saved next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
 
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest)
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
@@ -149,7 +149,15 @@ function Load-Video([int]$i) {
     $ui.KillCanvas.Children.Clear(); Set-KillButton
     Save-LastFolder $st.Video
     $ui.TitleText.Text = ('[{0}/{1}]  {2}' -f ($i + 1), $queue.Count, (Split-Path $st.Video -Leaf))
-    $ui.Player.Source = New-Object Uri($st.Video)
+    # a preview copy exists only if Windows couldn't play this recording before: play that right away
+    if ($st.Preview -and $st.Preview.Video -ne $st.Video) { Stop-Preview }
+    $pv = $null; try { $pv = Get-PreviewPath $st.Video } catch {}
+    $st.UsingPreview = [bool]($pv -and (Test-Path -LiteralPath $pv))
+    if ($st.UsingPreview) {
+        try { (Get-Item -LiteralPath $pv).LastWriteTime = Get-Date } catch {}
+        $ui.Player.Source = New-Object Uri($pv)
+        $ui.TitleText.Text += $script:PreviewNote
+    } else { $ui.Player.Source = New-Object Uri($st.Video) }
     $ui.Player.Volume = $ui.Vol.Value
     Start-Playing; $st.Playing = $true
     $st.LastSeekAt = [datetime]::MinValue
@@ -309,6 +317,80 @@ function Join-Slices {
     $script = Join-Path $PSScriptRoot 'Join.ps1'
     $argline = (@('-NoProfile','-ExecutionPolicy','Bypass','-File',$script) + @($st.Done) | ForEach-Object { Quote-Arg $_ }) -join ' '
     Start-Process powershell.exe -ArgumentList $argline
+}
+
+# ---------- preview copy: for recordings Windows' player can't open (AV1, HEVC without its extension ...) ----------
+$script:PreviewNote = '   (preview copy - cuts use the original)'
+$st.Preview = $null; $st.UsingPreview = $false
+
+# mode 0: all on the NVIDIA GPU, 1: GPU decoding via DirectX (any GPU), 2: CPU only - see Get-PreviewArgs
+function Start-Preview([int]$mode = -1, $info = $null) {
+    $v = $st.Video
+    if ($mode -lt 0) { $mode = if ($st.Enc -eq 'h264_nvenc') { 0 } else { 1 } }
+    $out = Get-PreviewPath $v
+    New-Item -ItemType Directory -Force (Split-Path $out) | Out-Null
+    Remove-OldPreviews
+    if (-not $info) {
+        $info = @{ Codec = ''; Width = 0; Height = 0 }
+        try {
+            $c = (& $ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,width,height -of csv=p=0 "$v" | Select-Object -First 1).Split(',')
+            $info = @{ Codec = $c[0].Trim(); Width = [int]$c[1]; Height = [int]$c[2] }
+        } catch {}
+    }
+    $dur = if ($st.Dur -gt 0) { $st.Dur } else { try { Get-Duration $ffprobe $v } catch { 0.0 } }
+    $p = @{ Video = $v; Out = $out; Tmp = "$out.part"; Prog = "$out.progress"; Mode = $mode; Info = $info; Dur = $dur; Codec = $info.Codec.ToUpper(); Pct = 0 }
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $ffmpeg
+    $psi.Arguments = (Get-PreviewArgs $v $p.Tmp $st.Enc $p.Prog $info $mode | ForEach-Object { Quote-Arg $_ }) -join ' '
+    $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+    $p.Proc = [Diagnostics.Process]::Start($psi)
+    if (Test-ObsRunning) { try { $p.Proc.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal } catch {} }
+    $st.Preview = $p
+    Show-PreviewProgress
+}
+
+function Show-PreviewProgress {
+    $p = $st.Preview
+    $what = if ($p.Codec) { "this $($p.Codec) recording" } else { 'this recording' }
+    $ui.MarkText.Text = "Windows can't play $what - making a preview copy {0:N0}%  (cuts use the original)" -f $p.Pct
+}
+
+function Stop-Preview {
+    $p = $st.Preview; $st.Preview = $null
+    if (-not $p) { return }
+    try { if (-not $p.Proc.HasExited) { $p.Proc.Kill(); $p.Proc.WaitForExit(2000) | Out-Null } } catch {}
+    foreach ($f in $p.Tmp, $p.Prog) { try { Remove-Item -LiteralPath $f -Force -ErrorAction Stop } catch {} }
+}
+
+# timer: progress, then switch the player over to the finished copy
+function Check-Preview {
+    $p = $st.Preview
+    if (-not $p) { return }
+    if (-not $p.Proc.HasExited) {
+        try {
+            $fs = [IO.File]::Open($p.Prog, 'Open', 'Read', 'ReadWrite, Delete')
+            $txt = (New-Object IO.StreamReader($fs)).ReadToEnd(); $fs.Close()
+            $m = [regex]::Matches($txt, 'out_time_us=(\d+)')
+            if ($m.Count -and $p.Dur -gt 0) { $p.Pct = [math]::Min(99, [double]$m[$m.Count - 1].Groups[1].Value / 1e6 / $p.Dur * 100) }
+        } catch {}
+        Show-PreviewProgress
+        return
+    }
+    $code = $p.Proc.ExitCode
+    $ok = ($code -eq 0) -and (Test-Path -LiteralPath $p.Tmp) -and ((Get-Item -LiteralPath $p.Tmp).Length -gt 4096)
+    if ($ok) { try { Move-Item -LiteralPath $p.Tmp $p.Out -Force -ErrorAction Stop } catch { $ok = $false } }
+    Stop-Preview
+    if (-not $ok) {
+        if ($p.Mode -lt 2 -and $p.Video -eq $st.Video) { Start-Preview ($p.Mode + 1) $p.Info; return }    # next way down: DirectX, then CPU
+        $ui.MarkText.Text = "Can't play this file, and making a preview copy failed (ffmpeg exit $code)"
+        return
+    }
+    if ($p.Video -ne $st.Video) { return }
+    $st.UsingPreview = $true
+    $ui.Player.Source = New-Object Uri($p.Out)
+    $ui.TitleText.Text += $script:PreviewNote
+    Play
+    Update-Marks
 }
 
 function Next-Video { if ($st.Index + 1 -lt $queue.Count) { Load-Video ($st.Index + 1) } else { $ui.MarkText.Text = 'That was the last recording - use "Add..." for more' } }
@@ -476,7 +558,14 @@ $ui.Player.Add_MediaOpened({
     Draw-KillTicks
 })
 $ui.Player.Add_MediaEnded({ if (Looping) { Seek-To $st.Start; Play } else { Pause-Video } })
-$ui.Player.Add_MediaFailed({ param($s, $e) $ui.MarkText.Text = "Can't play this file: $($e.ErrorException.Message)" })
+$ui.Player.Add_MediaFailed({
+    param($s, $e)
+    if (-not $st.UsingPreview -and -not $st.Preview) {
+        try { Start-Preview; return } catch {}
+    }
+    if ($st.Preview) { return }
+    $ui.MarkText.Text = "Can't play this file: $($e.ErrorException.Message)"
+})
 $ui.Vol.Add_ValueChanged({ $ui.Player.Volume = $ui.Vol.Value })
 
 $ui.BtnPlay.Add_Click({ Toggle-Play })
@@ -544,6 +633,7 @@ $timer.Add_Tick({
         if ($null -ne $st.Start -and $null -eq $st.End) { Update-Marks }
         Check-Jobs
         Check-Scans
+        Check-Preview
     } catch {}
 })
 
@@ -556,6 +646,7 @@ $win.Add_Closing({
         try { if ($st.Running) { $st.Running.Proc.Kill() } } catch {}
     }
     foreach ($sc in @($st.Scans.Values)) { if (-not $sc.Done) { $sc.Cancel() } }    # unfinished kill scans
+    Stop-Preview
     $timer.Stop(); $ui.Player.Stop(); $ui.Player.Close()
 })
 
@@ -625,6 +716,21 @@ if ($KillTest) {
         if ($script:kstep -gt 480) { Write-Host ("KILLTEST timeout`n  " + ($script:klog -join "`n  ")); $kt.Stop(); $win.Close() }
     })
     $win.Add_ContentRendered({ $kt.Start() })
+}
+
+if ($PreviewTest) {
+    # automated check of the preview copy: waits until the video plays (directly or from a preview), prints what happened
+    $script:pt0 = [datetime]::Now; $script:plog = New-Object System.Collections.ArrayList
+    $pt = New-Object Windows.Threading.DispatcherTimer
+    $pt.Interval = [TimeSpan]::FromMilliseconds(500)
+    $pt.Add_Tick({
+        $s = ([datetime]::Now - $script:pt0).TotalSeconds
+        [void]$script:plog.Add(('{0,5:N1}s  preview={1} using={2} pos={3:N2} dur={4:N2}  "{5}"' -f $s, [bool]$st.Preview, $st.UsingPreview, (Pos), $st.Dur, $ui.MarkText.Text))
+        if ((Pos) -gt 1.5 -or $s -gt 180) {
+            Write-Host ("PREVIEWTEST`n  " + ($script:plog -join "`n  ") + "`n  title: " + $ui.TitleText.Text); $pt.Stop(); $win.Close()
+        }
+    })
+    $win.Add_ContentRendered({ $pt.Start() })
 }
 
 $win.Add_Loaded({ Set-Title; Load-Video 0; $timer.Start() })

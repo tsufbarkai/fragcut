@@ -90,8 +90,8 @@ Select one or more videos and choose **Send to → FragCut - Compress**. It save
 
 ## Questions
 
-**The video is black or won't play.**
-The recording is probably HEVC (H.265) or AV1. Install *HEVC Video Extensions* or *AV1 Video Extension* from the Microsoft Store, or set your recorder to H.264. Cutting still works without them; only the preview needs them.
+**It says "making a preview copy" when I open a recording.**
+The player in FragCut is the one built into Windows, and it can't play some recordings, often AV1 or HEVC (H.265). FragCut then makes an H.264 copy of the recording, up to 1080p, and plays that instead. It takes a few seconds for a short recording and up to a few minutes for a long one, and is only made once. Clips are still cut from the original, so their quality isn't affected. The copies are kept in `%LOCALAPPDATA%\FragCut\preview` (the 8 most recent). To skip this step, set your recorder to H.264.
 
 **Does it use my graphics card?**
 Yes, if it can: NVIDIA, then AMD, then Intel. If none of them work, it uses the CPU, which is slower. The window title shows which one is used.
