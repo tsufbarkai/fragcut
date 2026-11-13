@@ -79,8 +79,8 @@ The recording is probably HEVC (H.265) or AV1. Install *HEVC Video Extensions* o
 **Does it use my graphics card?**
 Yes, if it can: NVIDIA, then AMD, then Intel. If none of them work, it uses the CPU, which is slower. The window title shows which one is used.
 
-**I'm recording FragCut with OBS and the recording stutters when I save a clip.**
-OBS and FragCut use the same video encoder on the graphics card. When FragCut sees that OBS is open, it saves clips more slowly so OBS has room. Saving takes a little longer while OBS is open.
+**Why does saving a clip take longer when OBS is open?**
+OBS and FragCut use the same video encoder on the graphics card. If FragCut saved at full speed, an OBS recording running at the same time could stutter. So while OBS is open, FragCut saves clips more slowly to leave room for it.
 
 **Does it upload anything?**
 No. Everything happens on your PC.
