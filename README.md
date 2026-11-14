@@ -6,7 +6,7 @@ You open a recording from the right-click menu, watch it, mark where a clip star
 
 ![FragCut: marking a part of a recording, adjusting it while it loops, and cutting it](docs/demo.gif)
 
-It works with any MP4 or MKV recording (NVIDIA App / ShadowPlay, Xbox Game Bar, AMD ReLive, OBS, Steam). It uses [ffmpeg](https://ffmpeg.org) to do the actual cutting, and encodes on your graphics card if it can.
+It works with any MP4 or MKV recording (NVIDIA App / ShadowPlay, Xbox Game Bar, AMD ReLive, OBS, Steam). It uses [ffmpeg](https://ffmpeg.org) to do the actual cutting, and encodes on your graphics card if it can. To play the recordings it uses [mpv](https://mpv.io), if it's installed.
 
 Requires Windows 10 or 11.
 
@@ -15,7 +15,7 @@ Requires Windows 10 or 11.
 1. Download `FragCut-vX.Y.Z.zip` from [Releases](https://github.com/tsufbarkai/fragcut/releases/latest) and unzip it.
 2. Double-click `Install.bat`.
    - If Windows shows "Windows protected your PC", click **More info** and then **Run anyway**. This appears because FragCut isn't code-signed.
-   - If ffmpeg isn't installed, the installer asks to install it for you (using `winget`).
+   - A window opens. It shows whether the two free programs FragCut uses are installed: **ffmpeg** (required, does the cutting) and **mpv** (recommended, plays the recordings, including AV1 and HEVC). Leave the missing ones ticked and click **Install**. ffmpeg is installed with `winget`. mpv is downloaded from its [official Windows builds](https://github.com/shinchiro/mpv-winbuild-cmake/releases) into FragCut's folder, after checking the file's published SHA-256 checksum.
 3. Right-click a recording and choose **Send to → FragCut**.
    On Windows 11, *Send to* is under **Show more options**, or hold Shift while right-clicking.
 
@@ -90,8 +90,11 @@ Select one or more videos and choose **Send to → FragCut - Compress**. It save
 
 ## Questions
 
+**Which player does FragCut use?**
+mpv, if it's installed (the window title says "player: mpv"). It plays H.264, HEVC, AV1 and VP9 recordings and decodes them on the graphics card. Without mpv, FragCut uses the player built into Windows.
+
 **It says "making a preview copy" when I open a recording.**
-The player in FragCut is the one built into Windows, and it can't play some recordings, often AV1 or HEVC (H.265). FragCut then makes an H.264 copy of the recording, up to 1080p, and plays that instead. It takes a few seconds for a short recording and up to a few minutes for a long one, and is only made once. Clips are still cut from the original, so their quality isn't affected. The copies are kept in `%LOCALAPPDATA%\FragCut\preview` (the 8 most recent). To skip this step, set your recorder to H.264.
+This only happens without mpv. Windows' player can't play some recordings, often AV1 or HEVC (H.265). FragCut then makes an H.264 copy of the recording, up to 1080p, and plays that instead. It takes a few seconds for a short recording and several minutes for a long one, and is only made once. Clips are still cut from the original, so their quality isn't affected. The copies are kept in `%LOCALAPPDATA%\FragCut\preview` (the 8 most recent). To skip this, install mpv by running `Install.bat` again.
 
 **Does it use my graphics card?**
 Yes, if it can: NVIDIA, then AMD, then Intel. If none of them work, it uses the CPU, which is slower. The window title shows which one is used.
@@ -106,17 +109,18 @@ It recognizes the white KILL / HEADSHOT / KILL CONFIRMED tags that appear left o
 No. Everything happens on your PC.
 
 **How do I uninstall it?**
-Run `Uninstall.bat` (it's in the zip and in `%LOCALAPPDATA%\FragCut`). Your clips are not deleted.
+Run `Uninstall.bat` (it's in the zip and in `%LOCALAPPDATA%\FragCut`). Your clips are not deleted. The copy of mpv in FragCut's folder is removed with it. ffmpeg stays installed; remove it with `winget uninstall Gyan.FFmpeg.Essentials`.
 
 ## How it works
 
-FragCut is a few PowerShell scripts. The player window uses WPF and Windows' built-in video playback. ffmpeg does the cutting, joining and compressing.
+FragCut is a few PowerShell scripts. The player window uses WPF. The video in it is mpv, started inside the window and controlled through mpv's JSON pipe, or Windows' built-in video playback when mpv isn't installed. ffmpeg does the cutting, joining and compressing.
 
 Every clip is encoded with the same settings (H.264 video, AAC 48 kHz stereo audio). That's why clips can be joined without re-encoding.
 
 | File | What it does |
 |---|---|
 | `FragCut.ps1` | the player: watch, mark, cut |
+| `Mpv.ps1` | runs mpv inside the player window |
 | `Join.ps1` | join clips |
 | `TimeCut.ps1` | cut by typed times |
 | `Compress.ps1` | make a smaller copy of a video |
@@ -125,8 +129,8 @@ Every clip is encoded with the same settings (H.264 video, AAC 48 kHz stereo aud
 | `KillMontage.ps1` | find the kills in recordings and join them into one video |
 | `kills\bf6\` | pictures of the Battlefield 6 kill tags |
 | `Core.ps1` | shared code (encoder detection, file names, ffmpeg settings) |
-| `Install.ps1` / `Uninstall.ps1` | add / remove the Send to and Desktop shortcuts |
+| `Install.ps1` / `Uninstall.ps1` | install window (copies FragCut, installs ffmpeg with winget, downloads mpv, adds the Send to and Desktop shortcuts) / remove it |
 
 ## License
 
-[MIT](LICENSE). ffmpeg isn't included. It's installed separately and has its own license (LGPL/GPL).
+[MIT](LICENSE). ffmpeg and mpv aren't included. They're installed separately and have their own licenses (LGPL/GPL).

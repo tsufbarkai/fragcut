@@ -17,7 +17,8 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
 . (Join-Path $PSScriptRoot 'Kills.ps1')
-Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
+. (Join-Path $PSScriptRoot 'Mpv.ps1')
+Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, WindowsFormsIntegration
 
 function Fail($msg) { [System.Windows.MessageBox]::Show($msg, 'FragCut', 'OK', 'Error') | Out-Null; exit 1 }
 
@@ -61,7 +62,7 @@ if ($queue.Count -eq 0) { exit }
     </Grid.RowDefinitions>
 
     <TextBlock x:Name="TitleText" Grid.Row="0" FontSize="15" Foreground="#9aa0ff" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"/>
-    <Border Grid.Row="1" Background="Black">
+    <Border x:Name="VideoBox" Grid.Row="1" Background="Black">
       <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop" ScrubbingEnabled="True" Stretch="Uniform"/>
     </Border>
     <Canvas x:Name="RangeCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0">
@@ -106,7 +107,7 @@ if ($queue.Count -eq 0) { exit }
 
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 $ui = @{}
-foreach ($n in 'TitleText','Player','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
+foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
 
 $st = @{
     Index = -1; Video = $null; Dur = 0.0; Playing = $false
@@ -126,8 +127,54 @@ $st = @{
 }
 
 function Set-Status($i, $text) { $ui.Slices.Items[$i] = $text }
-function Set-Title { $win.Title = "FragCut $FragCutVersion   -   encoding on: $(Get-EncoderName $st.Enc)" }
+function Set-Title { $win.Title = "FragCut $FragCutVersion   -   player: $(if ($st.Mpv) { 'mpv' } else { 'Windows' })   -   encoding on: $(Get-EncoderName $st.Enc)" }
 function Looping { ($null -ne $st.Start) -and ($null -ne $st.End) -and ($st.End -gt $st.Start) }
+
+# ---------- player: mpv inside the window if it's installed, else Windows' built-in player ----------
+$st.MpvExe = Find-Mpv
+$st.Mpv = $null
+if ($st.MpvExe) {
+    $wfh = New-Object System.Windows.Forms.Integration.WindowsFormsHost
+    $panel = New-Object System.Windows.Forms.Panel
+    $panel.BackColor = [Drawing.Color]::Black
+    $panel.Enabled = $false                      # clicks and keys stay with FragCut, not mpv
+    $wfh.Child = $panel
+    $ui.VideoBox.Child = $wfh
+    $st.MpvPanel = $panel
+}
+function Start-Mpv {
+    if (-not $st.MpvExe) { return }
+    try { $m = New-Object FragCutMpv.Player; $m.Start($st.MpvExe, $st.MpvPanel.Handle); $st.Mpv = $m }
+    catch {
+        # mpv didn't start: use the built-in player
+        $st.Mpv = $null; $st.MpvExe = $null
+        $ui.VideoBox.Child = $ui.Player
+        $ui.MarkText.Text = "mpv didn't start ($($_.Exception.Message)) - using Windows' player"
+    }
+}
+function P-Open($path) { if ($st.Mpv) { $st.Mpv.Load($path) } else { $ui.Player.Source = New-Object Uri($path) } }
+function P-Play  { if ($st.Mpv) { $st.Mpv.SetPause($false) } else { $ui.Player.Play() } }
+function P-Pause { if ($st.Mpv) { $st.Mpv.SetPause($true) }  else { $ui.Player.Pause() } }
+function P-Pos   { if ($st.Mpv) { $st.Mpv.TimePos } else { $ui.Player.Position.TotalSeconds } }
+function P-SetPos([double]$s, [switch]$Fast) { if ($st.Mpv) { $st.Mpv.Seek($s, -not $Fast) } else { $ui.Player.Position = [TimeSpan]::FromSeconds($s) } }
+function P-Speed([double]$x) { if ($st.Mpv) { $st.Mpv.SetSpeed($x) } else { $ui.Player.SpeedRatio = $x } }
+function P-Volume([double]$v) { if ($st.Mpv) { $st.Mpv.SetVolume($v) } else { $ui.Player.Volume = $v } }
+function P-Mute([bool]$m) { if ($st.Mpv) { $st.Mpv.SetMute($m) } else { $ui.Player.IsMuted = $m } }
+function P-Duration {
+    if ($st.Mpv) { return $st.Mpv.Duration }
+    if ($ui.Player.NaturalDuration.HasTimeSpan) { return $ui.Player.NaturalDuration.TimeSpan.TotalSeconds }
+    return 0.0
+}
+function P-Close { if ($st.Mpv) { $st.Mpv.Quit(); $st.Mpv = $null } else { $ui.Player.Stop(); $ui.Player.Close() } }
+# timer: mpv's events (the built-in player raises its own)
+function Check-Mpv {
+    $m = $st.Mpv
+    if (-not $m) { return }
+    if ($m.TakeLoaded()) { On-MediaOpened }
+    if ($m.TakeFailed()) { $ui.MarkText.Text = "Can't play this file: $($m.LastError)" }
+    if ($m.TakeEnded())  { On-MediaEnded }
+    if ($m.Exited) { $st.Mpv = $null; $st.MpvExe = $null; $ui.VideoBox.Child = $ui.Player; $ui.MarkText.Text = 'mpv closed - switched to Windows'' player'; if ($st.Video) { Load-Video $st.Index } }
+}
 
 # ---------- recordings list ----------
 function Refresh-Videos {
@@ -149,16 +196,20 @@ function Load-Video([int]$i) {
     $ui.KillCanvas.Children.Clear(); Set-KillButton
     Save-LastFolder $st.Video
     $ui.TitleText.Text = ('[{0}/{1}]  {2}' -f ($i + 1), $queue.Count, (Split-Path $st.Video -Leaf))
-    # a preview copy exists only if Windows couldn't play this recording before: play that right away
     if ($st.Preview -and $st.Preview.Video -ne $st.Video) { Stop-Preview }
-    $pv = $null; try { $pv = Get-PreviewPath $st.Video } catch {}
-    $st.UsingPreview = [bool]($pv -and (Test-Path -LiteralPath $pv))
-    if ($st.UsingPreview) {
-        try { (Get-Item -LiteralPath $pv).LastWriteTime = Get-Date } catch {}
-        $ui.Player.Source = New-Object Uri($pv)
-        $ui.TitleText.Text += $script:PreviewNote
-    } else { $ui.Player.Source = New-Object Uri($st.Video) }
-    $ui.Player.Volume = $ui.Vol.Value
+    $st.UsingPreview = $false
+    if ($st.Mpv) { P-Open $st.Video }
+    else {
+        # Windows' player: a preview copy exists only if it couldn't play this recording before - play that right away
+        $pv = $null; try { $pv = Get-PreviewPath $st.Video } catch {}
+        $st.UsingPreview = [bool]($pv -and (Test-Path -LiteralPath $pv))
+        if ($st.UsingPreview) {
+            try { (Get-Item -LiteralPath $pv).LastWriteTime = Get-Date } catch {}
+            P-Open $pv
+            $ui.TitleText.Text += $script:PreviewNote
+        } else { P-Open $st.Video }
+    }
+    P-Volume $ui.Vol.Value
     Start-Playing; $st.Playing = $true
     $st.LastSeekAt = [datetime]::MinValue
     Refresh-Videos
@@ -166,7 +217,7 @@ function Load-Video([int]$i) {
 }
 
 # ---------- playback ----------
-function Pos { $ui.Player.Position.TotalSeconds }
+function Pos { P-Pos }
 
 # Position to step from: right after a seek the player may still report the old position,
 # so repeated key presses build on the last target instead.
@@ -178,25 +229,28 @@ function Base-Pos {
 # Exact seek: while playing, the player snaps to keyframes, so pause, seek, then resume.
 function Seek-To([double]$s) {
     if ($st.Dur -gt 0) { $s = [math]::Max(0.0, [math]::Min($s, $st.Dur - 0.02)) } else { $s = [math]::Max(0.0, $s) }
-    if ($st.Playing) { $ui.Player.Pause() }
-    $ui.Player.Position = [TimeSpan]::FromSeconds($s)
-    if ($st.Playing) { Start-Playing }
+    if ($st.Mpv) { P-SetPos $s }        # mpv seeks exactly while playing
+    else {
+        if ($st.Playing) { P-Pause }
+        P-SetPos $s
+        if ($st.Playing) { Start-Playing }
+    }
     $ui.Seek.Value = $s
     $st.LastSeek = $s; $st.LastSeekAt = [datetime]::Now
 }
 # Play at the chosen speed (the player can forget the speed after a pause/seek, so set it every time)
-function Start-Playing { $ui.Player.SpeedRatio = $st.Speeds[$st.SpeedIx]; $ui.Player.Play(); $ui.Player.SpeedRatio = $st.Speeds[$st.SpeedIx] }
+function Start-Playing { P-Speed $st.Speeds[$st.SpeedIx]; P-Play; P-Speed $st.Speeds[$st.SpeedIx] }
 function Play { Start-Playing; $st.Playing = $true }
 function Change-Speed([int]$d) {
     $st.SpeedIx = [math]::Max(0, [math]::Min($st.Speeds.Count - 1, $st.SpeedIx + $d))
-    $ui.Player.SpeedRatio = $st.Speeds[$st.SpeedIx]   # applies live while playing
+    P-Speed $st.Speeds[$st.SpeedIx]   # applies live while playing
 }
 function Speed-Text {
     $x = [double]$st.Speeds[$st.SpeedIx]
     if ($x -eq 1.0) { return '' }
     return ('   {0}x' -f $x.ToString([Globalization.CultureInfo]::InvariantCulture))
 }
-function Pause-Video { $ui.Player.Pause(); $st.Playing = $false }
+function Pause-Video { P-Pause; $st.Playing = $false }
 function Toggle-Play { if ($st.Playing) { Pause-Video } else { Play } }
 function Step([double]$d) { if ($st.Playing) { Pause-Video }; Seek-To ((Base-Pos) + $d) }
 
@@ -387,7 +441,7 @@ function Check-Preview {
     }
     if ($p.Video -ne $st.Video) { return }
     $st.UsingPreview = $true
-    $ui.Player.Source = New-Object Uri($p.Out)
+    P-Open $p.Out
     $ui.TitleText.Text += $script:PreviewNote
     Play
     Update-Marks
@@ -525,7 +579,7 @@ $ui.Seek.Add_PreviewMouseLeftButtonDown({
     $e.Handled = $true
     $st.Dragging = $true; $st.DragWasPlaying = $st.Playing
     if ($st.Playing) { Pause-Video }
-    $ui.Player.IsMuted = $true
+    P-Mute $true
     [void]$ui.Seek.CaptureMouse()
     Seek-To (Track-Value $e)
 })
@@ -535,29 +589,31 @@ $ui.Seek.Add_PreviewMouseMove({
     $e.Handled = $true
     $v = Track-Value $e
     $ui.Seek.Value = $v
-    $ui.Player.Position = [TimeSpan]::FromSeconds($v)
+    P-SetPos $v -Fast
     $st.LastSeek = $v; $st.LastSeekAt = [datetime]::Now
 })
 function End-Drag {
     if (-not $st.Dragging) { return }
     $st.Dragging = $false
-    $ui.Player.IsMuted = $false
+    P-Mute $false
     if ($st.DragWasPlaying) { Play }
 }
 $ui.Seek.Add_PreviewMouseLeftButtonUp({ param($s, $e) $e.Handled = $true; if ($st.Dragging) { Seek-To (Track-Value $e) }; $ui.Seek.ReleaseMouseCapture(); End-Drag })
 $ui.Seek.Add_LostMouseCapture({ End-Drag })
 
 # ---------- events ----------
-$ui.Player.Add_MediaOpened({
-    # the player rounds the length down to whole seconds; ffprobe gives the exact length
+function On-MediaOpened {
+    # Windows' player rounds the length down to whole seconds; ffprobe gives the exact length
     $d = 0.0; try { $d = Get-Duration $ffprobe $st.Video } catch {}
-    if ($ui.Player.NaturalDuration.HasTimeSpan) { $d = [math]::Max($d, $ui.Player.NaturalDuration.TimeSpan.TotalSeconds) }
+    $d = [math]::Max($d, (P-Duration))
     $st.Dur = $d
     $ui.Seek.Maximum = [math]::Max(0.1, $st.Dur)
     Update-Marks
     Draw-KillTicks
-})
-$ui.Player.Add_MediaEnded({ if (Looping) { Seek-To $st.Start; Play } else { Pause-Video } })
+}
+function On-MediaEnded { if (Looping) { Seek-To $st.Start; Play } else { Pause-Video } }
+$ui.Player.Add_MediaOpened({ On-MediaOpened })
+$ui.Player.Add_MediaEnded({ On-MediaEnded })
 $ui.Player.Add_MediaFailed({
     param($s, $e)
     if (-not $st.UsingPreview -and -not $st.Preview) {
@@ -566,7 +622,7 @@ $ui.Player.Add_MediaFailed({
     if ($st.Preview) { return }
     $ui.MarkText.Text = "Can't play this file: $($e.ErrorException.Message)"
 })
-$ui.Vol.Add_ValueChanged({ $ui.Player.Volume = $ui.Vol.Value })
+$ui.Vol.Add_ValueChanged({ P-Volume $ui.Vol.Value })
 
 $ui.BtnPlay.Add_Click({ Toggle-Play })
 $ui.BtnStart.Add_Click({ Mark-Start })
@@ -634,6 +690,7 @@ $timer.Add_Tick({
         Check-Jobs
         Check-Scans
         Check-Preview
+        Check-Mpv
     } catch {}
 })
 
@@ -647,7 +704,7 @@ $win.Add_Closing({
     }
     foreach ($sc in @($st.Scans.Values)) { if (-not $sc.Done) { $sc.Cancel() } }    # unfinished kill scans
     Stop-Preview
-    $timer.Stop(); $ui.Player.Stop(); $ui.Player.Close()
+    $timer.Stop(); P-Close
 })
 
 if ($SelfTest) {
@@ -726,6 +783,7 @@ if ($PreviewTest) {
     $pt.Add_Tick({
         $s = ([datetime]::Now - $script:pt0).TotalSeconds
         [void]$script:plog.Add(('{0,5:N1}s  preview={1} using={2} pos={3:N2} dur={4:N2}  "{5}"' -f $s, [bool]$st.Preview, $st.UsingPreview, (Pos), $st.Dur, $ui.MarkText.Text))
+        if ((Pos) -gt 1.5 -and $st.Index + 1 -lt $queue.Count) { [void]$script:plog.Add('  >> next recording'); Next-Video; return }   # several files: play each
         if ((Pos) -gt 1.5 -or $s -gt 180) {
             Write-Host ("PREVIEWTEST`n  " + ($script:plog -join "`n  ") + "`n  title: " + $ui.TitleText.Text); $pt.Stop(); $win.Close()
         }
@@ -733,7 +791,7 @@ if ($PreviewTest) {
     $win.Add_ContentRendered({ $pt.Start() })
 }
 
-$win.Add_Loaded({ Set-Title; Load-Video 0; $timer.Start() })
+$win.Add_Loaded({ Start-Mpv; Set-Title; Load-Video 0; $timer.Start() })
 [void]$win.ShowDialog()
 
 # remove placeholders of slices that never finished

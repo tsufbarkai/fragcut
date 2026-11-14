@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0
+
+- **mpv as the player**: if [mpv](https://mpv.io) is installed, FragCut plays recordings with it, inside its window.
+  It plays H.264, HEVC, AV1 and VP9 directly and decodes on the graphics card, so AV1 recordings open
+  right away instead of waiting for a preview copy. Without mpv, FragCut uses Windows' player as before.
+  The window title shows which player is used.
+- **Installer window**: `Install.bat` opens a window instead of a console. It shows whether ffmpeg (required) and
+  mpv (recommended) are installed, and installs the missing ones when you click Install: ffmpeg with winget,
+  mpv by downloading its official Windows build (shinchiro) into FragCut's folder, checked against its SHA-256.
+  No administrator rights needed. If that download can't be unpacked (older Windows 10), it falls back to winget.
+- Uninstall asks in a dialog instead of a console window.
+
 ## 1.4.1
 
 - **Plays recordings Windows can't**: some recordings (for example AV1 from newer NVIDIA or AMD cards) failed with

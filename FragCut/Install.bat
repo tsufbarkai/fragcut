@@ -1,2 +1,3 @@
 @echo off
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Install.ps1"
+rem Opens the FragCut installer window (no console window stays open).
+start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File "%~dp0Install.ps1"
