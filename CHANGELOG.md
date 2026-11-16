@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.9.0
+
+- **New layout.** The folder FragCut works in is shown in a bar across the top, with **Change folder** next to it
+  (with no folder yet, the Library shows a **Choose your recordings folder** button).
+- The right side is the **Library**: Make round, Undo round and Delete are above the list, and a yellow line counts the
+  recordings that aren't in a round yet. Click it to select them for Make round.
+- Round lines show the tag, the date and what's in them, like `BF6-5 · 13 Nov   1 rec · 4 clips`. Recordings in a round
+  are listed by their number and time of day (`#1  22:33:44`), clips by their times (`clip 00m02-00m03`).
+  The full file name is in the tooltip.
+- The buttons under the video are grouped: previous / play / next, then Start, End, clear and **Cut clip**, then Find kills.
+  Fast cut and Also MP3 are on the right.
+- The clip list is a panel with its own buttons and a **Join N clips** button, and shows how many clips and seconds it holds.
+- Player and encoder are shown in the top bar instead of the window title.
+
 ## 1.8.0
 
 - **FragCut opens without asking for files.** It shows the folder you pick with **Set folder...** (it remembers it).

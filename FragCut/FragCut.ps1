@@ -12,7 +12,8 @@
 # Slices are saved in a "clips" folder next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
 
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest, [switch]$RoundTest, [switch]$GripTest, [switch]$LibTest)
+[CmdletBinding(PositionalBinding = $false)]   # file names always go into $Files
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest, [switch]$RoundTest, [switch]$GripTest, [switch]$LibTest, [string]$ShotTest)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
@@ -58,91 +59,196 @@ if ($sentFiles.Count -eq 0 -and $SelfTest) { Write-Host 'SELFTEST no video given
 [xml]$xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FragCut" Width="1360" Height="880" MinWidth="900" MinHeight="580"
-        Background="#1b1b1f" Foreground="#e8e8ea" WindowStartupLocation="CenterScreen" FontSize="14">
+        Title="FragCut" Width="1400" Height="900" MinWidth="980" MinHeight="620"
+        Background="#141417" Foreground="#e8e8ea" WindowStartupLocation="CenterScreen" FontSize="14" FontFamily="Segoe UI">
   <Window.Resources>
+    <SolidColorBrush x:Key="Panel" Color="#1d1d22"/>
+    <SolidColorBrush x:Key="Line" Color="#2e2e36"/>
+    <SolidColorBrush x:Key="Muted" Color="#8d8d97"/>
     <Style TargetType="Button">
-      <Setter Property="Background" Value="#2d2d34"/><Setter Property="Foreground" Value="#e8e8ea"/>
-      <Setter Property="BorderBrush" Value="#44444c"/><Setter Property="Padding" Value="10,6"/>
-      <Setter Property="Margin" Value="0,0,6,6"/><Setter Property="Focusable" Value="False"/>
+      <Setter Property="Background" Value="#2a2a31"/><Setter Property="Foreground" Value="#e8e8ea"/>
+      <Setter Property="BorderBrush" Value="#3a3a43"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="11,5"/><Setter Property="Margin" Value="0,0,6,0"/>
+      <Setter Property="Focusable" Value="False"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="B" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.85"/></Trigger>
+              <Trigger Property="IsPressed" Value="True"><Setter TargetName="B" Property="Opacity" Value="0.7"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="B" Property="Opacity" Value="0.45"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
     </Style>
-    <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#e8e8ea"/><Setter Property="Focusable" Value="False"/></Style>
+    <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="#3b5bdb"/><Setter Property="BorderBrush" Value="#4c6ef5"/><Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style x:Key="Success" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="#2b8a3e"/><Setter Property="BorderBrush" Value="#37b24d"/><Setter Property="Foreground" Value="White"/>
+    </Style>
+    <Style x:Key="Round" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="#2e2650"/><Setter Property="BorderBrush" Value="#5f3dc4"/><Setter Property="Foreground" Value="#d0bfff"/>
+    </Style>
+    <Style x:Key="Kills" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="#3a1d2a"/><Setter Property="BorderBrush" Value="#a61e4d"/><Setter Property="Foreground" Value="#faa2c1"/>
+    </Style>
+    <Style x:Key="Icon" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/><Setter Property="FontSize" Value="13"/><Setter Property="Padding" Value="9,6"/>
+    </Style>
+    <Style x:Key="Ghost" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="Transparent"/>
+    </Style>
+    <Style TargetType="CheckBox"><Setter Property="Foreground" Value="#c9c9d1"/><Setter Property="Focusable" Value="False"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+    <Style TargetType="ListBox">
+      <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Foreground" Value="#e8e8ea"/>
+      <Setter Property="Focusable" Value="False"/>
+    </Style>
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Padding" Value="6,2"/><Setter Property="Foreground" Value="#e8e8ea"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="B" Background="Transparent" CornerRadius="5" Padding="{TemplateBinding Padding}" Margin="0,0,0,1">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="#26262e"/></Trigger>
+              <Trigger Property="IsSelected" Value="True"><Setter TargetName="B" Property="Background" Value="#2c3354"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
   </Window.Resources>
-  <Grid Margin="12">
-    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="270"/></Grid.ColumnDefinitions>
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/>
-      <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="150"/>
-    </Grid.RowDefinitions>
 
-    <TextBlock x:Name="TitleText" Grid.Row="0" FontSize="15" Foreground="#9aa0ff" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"/>
-    <Border x:Name="VideoBox" Grid.Row="1" Background="Black">
-      <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop" ScrubbingEnabled="True" Stretch="Uniform"/>
-    </Border>
-    <Canvas x:Name="RangeCanvas" Grid.Row="2" Height="14" Margin="5,7,5,-3" Background="Transparent">
-      <Rectangle x:Name="RangeRect" Canvas.Top="3" Height="8" Fill="#f0a020" Width="0"/>
-      <Rectangle x:Name="StartGrip" Width="4" Height="14" Fill="#ffe2a8" Visibility="Collapsed"/>
-      <Rectangle x:Name="EndGrip" Width="4" Height="14" Fill="#ffe2a8" Visibility="Collapsed"/>
-    </Canvas>
-    <Canvas x:Name="KillCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0" IsHitTestVisible="False"/>
-    <Slider x:Name="Seek" Grid.Row="3" Minimum="0" Maximum="1" Focusable="False" Margin="0,2,0,0" Cursor="Hand"/>
-    <DockPanel Grid.Row="4" Margin="0,8,0,0" LastChildFill="True">
-      <TextBlock x:Name="TimeText" DockPanel.Dock="Left" FontFamily="Consolas" FontSize="18" VerticalAlignment="Center" Width="290"/>
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-        <TextBlock Text="Vol" VerticalAlignment="Center" Margin="12,0,6,0"/>
-        <Slider x:Name="Vol" Width="110" Minimum="0" Maximum="1" Value="0.6" Focusable="False" VerticalAlignment="Center"/>
-      </StackPanel>
-      <TextBlock x:Name="MarkText" FontFamily="Consolas" FontSize="15" Foreground="#f0a020" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-    </DockPanel>
-    <WrapPanel Grid.Row="5" Margin="0,10,0,4">
-      <Button x:Name="BtnPlay"  Content="Play/Pause [Space]"/>
-      <Button x:Name="BtnStart" Content="Mark start [I]"/>
-      <Button x:Name="BtnEnd"   Content="Mark end [O]"/>
-      <Button x:Name="BtnClear" Content="Clear [Esc]"/>
-      <Button x:Name="BtnCut"   Content="Cut slice [Enter]" Background="#3b5bdb"/>
-      <Button x:Name="BtnJoin"  Content="Join slices [J]" Background="#2f9e44"/>
-      <Button x:Name="BtnKills" Content="Find kills [K]" Background="#a61e4d" ToolTip="Battlefield 6: finds the kills in this recording. Then K = next kill, Shift+K = previous."/>
-      <CheckBox x:Name="ChkMp3" Content="Also save MP3" VerticalAlignment="Center" Margin="6,0,0,6"/>
-      <CheckBox x:Name="ChkFast" Content="Fast cut (no re-encode)" VerticalAlignment="Center" Margin="12,0,0,6"
-                ToolTip="Copies the video as it is: instant, original quality and size per second, same format as the recording. The clip starts on the nearest full picture (keyframe) before your mark, usually up to 0.5-2 s earlier. Clips stay in the recording's format (AV1 / HEVC clips may not play everywhere)."/>
-    </WrapPanel>
-    <DockPanel Grid.Row="6">
-      <WrapPanel DockPanel.Dock="Bottom" Margin="0,6,0,0">
-        <Button x:Name="BtnClipPlay" Content="Play" ToolTip="Play the selected clip (or double-click it)" Padding="10,3"/>
-        <Button x:Name="BtnClipUp" Content="Up" Padding="10,3"/>
-        <Button x:Name="BtnClipDown" Content="Down" Padding="10,3"/>
-        <Button x:Name="BtnClipRemove" Content="Remove" ToolTip="Take the clip off this list (the file stays)" Padding="10,3"/>
-        <Button x:Name="BtnClipClear" Content="Clear list" ToolTip="Empty this list (the files stay)" Padding="10,3"/>
-        <TextBlock Text="Join [J] joins the saved clips in this list, top to bottom, then empties it." Foreground="#8a8a92" FontSize="12" VerticalAlignment="Center" Margin="6,0,0,6"/>
-      </WrapPanel>
-      <ListBox x:Name="Slices" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False" FontFamily="Consolas"/>
-    </DockPanel>
-
-    <DockPanel Grid.Column="2" Grid.Row="0" Grid.RowSpan="7">
-      <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
-        <CheckBox x:Name="ChkClips" DockPanel.Dock="Right" Content="Show clips" VerticalAlignment="Center" ToolTip="Show the clips under the recordings they were cut from"/>
-        <TextBlock x:Name="LibTitle" Text="Recordings" FontSize="15" Foreground="#9aa0ff" TextTrimming="CharacterEllipsis"/>
+  <DockPanel Margin="12">
+    <!-- top bar: the folder FragCut works in -->
+    <Border DockPanel.Dock="Top" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="10,8" Margin="0,0,0,12">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Text="FragCut" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" Margin="2,0,14,0"/>
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <Button x:Name="BtnOpen" Content="Add files..." Style="{StaticResource Ghost}" Foreground="#a8a8b3" ToolTip="Add recordings from another folder to the list"/>
+          <TextBlock x:Name="InfoText" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="8,0,2,0"/>
+        </StackPanel>
+        <Border x:Name="FolderBar" Background="#1f2742" BorderBrush="#3b5bdb" BorderThickness="1" CornerRadius="6" Padding="10,5" Cursor="Hand" ToolTip="The folder with your recordings. Click to change it.">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Left" Text="&#xE838;" FontFamily="Segoe MDL2 Assets" FontSize="16" Foreground="#91a7ff" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <Button x:Name="BtnFolder" DockPanel.Dock="Right" Content="Change folder" Style="{StaticResource Primary}" Margin="10,0,0,0" Padding="12,4"/>
+            <TextBlock x:Name="FolderName" FontWeight="SemiBold" FontSize="15" Foreground="#dbe4ff" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <TextBlock x:Name="FolderPath" Foreground="#91a7ff" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          </DockPanel>
+        </Border>
       </DockPanel>
-      <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
-        <Button x:Name="BtnPrev" Content="Prev [P]"/>
-        <Button x:Name="BtnNext" Content="Next [N]"/>
-        <Button x:Name="BtnFolder" Content="Set folder..." ToolTip="Pick the folder with your recordings. FragCut opens it from now on."/>
-        <Button x:Name="BtnOpen" Content="Add..." ToolTip="Add recordings from another folder to the list"/>
-        <Button x:Name="BtnRound" Content="Make round..." Background="#5f3dc4" ToolTip="Put the selected recordings in a folder of their own, renamed and numbered (e.g. BF6-12-1, BF6-12-2)"/>
-        <Button x:Name="BtnUndo" Content="Undo round" ToolTip="Move the files of the last round back to their old names"/>
-        <Button x:Name="BtnDelete" Content="Delete..." ToolTip="Move the selected recordings or clips to the Recycle Bin"/>
-      </WrapPanel>
-      <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="#8a8a92" FontSize="12" Margin="0,10,0,0"
-                 Text="Yellow = not in a round yet. Click a round to open or close it. Ctrl+click or Shift+click to select several. Right-click for more."/>
-      <ListBox x:Name="Videos" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False" SelectionMode="Extended"/>
-    </DockPanel>
-  </Grid>
+    </Border>
+
+    <Grid>
+      <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="330"/></Grid.ColumnDefinitions>
+
+      <!-- left: player, controls, clip list -->
+      <Grid Grid.Column="0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+          <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="170"/>
+        </Grid.RowDefinitions>
+        <TextBlock x:Name="TitleText" Grid.Row="0" FontSize="14" Foreground="#c9c9d1" Margin="2,0,0,8" TextTrimming="CharacterEllipsis"/>
+        <Border x:Name="VideoBox" Grid.Row="1" Background="Black" CornerRadius="6">
+          <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop" ScrubbingEnabled="True" Stretch="Uniform"/>
+        </Border>
+        <Canvas x:Name="RangeCanvas" Grid.Row="2" Height="14" Margin="5,7,5,-3" Background="Transparent">
+          <Rectangle x:Name="RangeRect" Canvas.Top="3" Height="8" Fill="#f0a020" Width="0" RadiusX="2" RadiusY="2"/>
+          <Rectangle x:Name="StartGrip" Width="4" Height="14" Fill="#ffe2a8" Visibility="Collapsed"/>
+          <Rectangle x:Name="EndGrip" Width="4" Height="14" Fill="#ffe2a8" Visibility="Collapsed"/>
+        </Canvas>
+        <Canvas x:Name="KillCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0" IsHitTestVisible="False"/>
+        <Slider x:Name="Seek" Grid.Row="3" Minimum="0" Maximum="1" Focusable="False" Margin="0,2,0,0" Cursor="Hand"/>
+        <DockPanel Grid.Row="4" Margin="0,6,0,0" LastChildFill="True">
+          <TextBlock x:Name="TimeText" DockPanel.Dock="Left" FontFamily="Consolas" FontSize="17" VerticalAlignment="Center" Width="270"/>
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+            <TextBlock Text="&#xE767;" FontFamily="Segoe MDL2 Assets" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,8,0"/>
+            <Slider x:Name="Vol" Width="110" Minimum="0" Maximum="1" Value="0.6" Focusable="False" VerticalAlignment="Center"/>
+          </StackPanel>
+          <TextBlock x:Name="MarkText" FontFamily="Consolas" FontSize="14" Foreground="#f0a020" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
+        <!-- controls: playback | marking and cutting | kills | options -->
+        <DockPanel Grid.Row="5" Margin="0,10,0,10">
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+            <CheckBox x:Name="ChkFast" Content="Fast cut" Margin="0,0,14,0"
+                      ToolTip="Fast cut (no re-encode): copies the video as it is - instant, original quality and size per second, same format as the recording. The clip starts on the nearest full picture (keyframe) before your mark, usually up to 0.5-2 s earlier. Clips stay in the recording's format (AV1 / HEVC clips may not play everywhere)."/>
+            <CheckBox x:Name="ChkMp3" Content="Also MP3" ToolTip="Also save the sound of each clip (and montage) as an MP3"/>
+          </StackPanel>
+          <WrapPanel>
+            <Button x:Name="BtnPrev" Content="&#xE892;" Style="{StaticResource Icon}" ToolTip="Previous recording [P]" Margin="0,0,4,0"/>
+            <Button x:Name="BtnPlay" Content="&#xE768;" Style="{StaticResource Icon}" ToolTip="Play / pause [Space]" Margin="0,0,4,0"/>
+            <Button x:Name="BtnNext" Content="&#xE893;" Style="{StaticResource Icon}" ToolTip="Next recording [N]" Margin="0,0,16,0"/>
+            <Button x:Name="BtnStart" Content="Start  I" ToolTip="Mark the start [I]"/>
+            <Button x:Name="BtnEnd" Content="End  O" ToolTip="Mark the end [O] - the marked part loops"/>
+            <Button x:Name="BtnClear" Content="&#xE711;" Style="{StaticResource Icon}" ToolTip="Clear the marks [Esc]"/>
+            <Button x:Name="BtnCut" Content="Cut clip  Enter" Style="{StaticResource Primary}" Margin="0,0,16,0" ToolTip="Save the marked part as a clip [Enter or C]"/>
+            <Button x:Name="BtnKills" Content="Find kills  K" Style="{StaticResource Kills}" ToolTip="Battlefield 6: finds the kills in this recording. Then K = next kill, Shift+K = previous."/>
+          </WrapPanel>
+        </DockPanel>
+        <!-- the clip list: what Join joins -->
+        <Border Grid.Row="6" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="10,8">
+          <DockPanel>
+            <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+              <Button x:Name="BtnJoin" DockPanel.Dock="Right" Content="Join  J" Style="{StaticResource Success}" Margin="8,0,0,0" ToolTip="Join the saved clips of this list, top to bottom, then empty the list [J]"/>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button x:Name="BtnClipPlay" Content="&#xE768;" Style="{StaticResource Icon}" ToolTip="Play the selected clip (or double-click it)" Margin="0,0,4,0"/>
+                <Button x:Name="BtnClipUp" Content="&#xE74A;" Style="{StaticResource Icon}" ToolTip="Move up" Margin="0,0,4,0"/>
+                <Button x:Name="BtnClipDown" Content="&#xE74B;" Style="{StaticResource Icon}" ToolTip="Move down" Margin="0,0,4,0"/>
+                <Button x:Name="BtnClipRemove" Content="&#xE711;" Style="{StaticResource Icon}" ToolTip="Take the clip off this list (the file stays)" Margin="0,0,4,0"/>
+                <Button x:Name="BtnClipClear" Content="Clear" ToolTip="Empty this list (the files stay)" Margin="0"/>
+              </StackPanel>
+              <TextBlock Text="Clip list" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              <TextBlock x:Name="ClipInfo" Foreground="{StaticResource Muted}" FontSize="12" VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
+            <ListBox x:Name="Slices" FontFamily="Consolas" FontSize="13"/>
+          </DockPanel>
+        </Border>
+      </Grid>
+
+      <!-- right: the library (folder, rounds, recordings, clips) -->
+      <Border Grid.Column="2" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8" Padding="10,8">
+        <DockPanel>
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <CheckBox x:Name="ChkClips" DockPanel.Dock="Right" Content="Clips" ToolTip="Show the clips under the recordings they were cut from"/>
+            <TextBlock Text="Library" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center"/>
+          </DockPanel>
+          <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <Button x:Name="BtnRound" Content="Make round..." Style="{StaticResource Round}" ToolTip="Put the selected recordings in a folder of their own, renamed and numbered (e.g. BF6-12-1, BF6-12-2)"/>
+            <Button x:Name="BtnUndo" Content="Undo round" ToolTip="Move the files of the last round back to their old names"/>
+            <Button x:Name="BtnDelete" Content="&#xE74D;" Style="{StaticResource Icon}" ToolTip="Move the selected recordings or clips to the Recycle Bin"/>
+          </WrapPanel>
+          <Border x:Name="LooseBar" DockPanel.Dock="Top" Background="#3a3218" BorderBrush="#8a6d1c" BorderThickness="1" CornerRadius="6" Padding="9,5" Margin="0,0,0,8" Cursor="Hand"
+                  Visibility="Collapsed" ToolTip="Click to select them, then Make round">
+            <TextBlock x:Name="LooseText" Foreground="#ffd866" FontSize="13"/>
+          </Border>
+          <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12" Margin="2,8,0,0"
+                     Text="Click a round to open or close it. Ctrl+click or Shift+click selects several. Right-click for more."/>
+          <Grid>
+            <ListBox x:Name="Videos" SelectionMode="Extended" ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
+            <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed" Margin="10">
+              <TextBlock Text="&#xE838;" FontFamily="Segoe MDL2 Assets" FontSize="34" Foreground="#5c7cfa" HorizontalAlignment="Center" Margin="0,0,0,10"/>
+              <TextBlock x:Name="EmptyText" Text="Pick the folder your recordings are saved in" TextWrapping="Wrap" TextAlignment="Center" Foreground="#c9c9d1" Margin="0,0,0,12"/>
+              <Button x:Name="BtnChooseFolder" Content="Choose your recordings folder" Style="{StaticResource Primary}" HorizontalAlignment="Center" Padding="16,8"/>
+            </StackPanel>
+          </Grid>
+        </DockPanel>
+      </Border>
+    </Grid>
+  </DockPanel>
 </Window>
 '@
 
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 $ui = @{}
-foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','StartGrip','EndGrip','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','ChkFast','Slices','Videos','BtnPrev','BtnNext','BtnOpen','BtnFolder','BtnRound','BtnUndo','BtnDelete','ChkClips','LibTitle','BtnClipPlay','BtnClipUp','BtnClipDown','BtnClipRemove','BtnClipClear') { $ui[$n] = $win.FindName($n) }
+foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','StartGrip','EndGrip','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','ChkFast','Slices','Videos','BtnPrev','BtnNext','BtnOpen','BtnFolder','BtnRound','BtnUndo','BtnDelete','ChkClips','BtnClipPlay','BtnClipUp','BtnClipDown','BtnClipRemove','BtnClipClear','InfoText','FolderBar','FolderName','FolderPath','ClipInfo','LooseBar','LooseText','EmptyState','EmptyText','BtnChooseFolder') { $ui[$n] = $win.FindName($n) }
 
 $st = @{
     Index = -1; Video = $null; Dur = 0.0; Playing = $false
@@ -175,9 +281,16 @@ function Render-Slices {
         [void]$ui.Slices.Items.Add(('{0,2}. {1}  {2}{3}' -f ($i + 1), $c.Label, $c.Status, $c.Mp3Note))
     }
     if ($sel -ge 0 -and $sel -lt $ui.Slices.Items.Count) { $ui.Slices.SelectedIndex = $sel }
+    $saved = @($st.Clips | Where-Object { $_.Saved })
+    $secs = 0.0; foreach ($c in $saved) { if ($c.Len) { $secs += $c.Len } }
+    $ui.ClipInfo.Text = if (-not $st.Clips.Count) { 'clips you cut show up here' } else { '{0} clip{1}{2}' -f $st.Clips.Count, $(if ($st.Clips.Count -ne 1) { 's' } else { '' }), $(if ($secs -gt 0) { '  {0}  {1:N1} s' -f [char]0x00B7, $secs } else { '' }) }
+    $ui.BtnJoin.Content = if ($saved.Count -ge 2) { "Join $($saved.Count) clips  J" } else { 'Join  J' }
 }
 function Set-ClipStatus($c, [string]$status) { $c.Status = $status; Render-Slices }
-function Set-Title { $win.Title = "FragCut $FragCutVersion   -   player: $(if ($st.Mpv) { 'mpv' } else { 'Windows' })   -   encoding on: $(Get-EncoderName $st.Enc)" }
+function Set-Title {
+    $win.Title = "FragCut $FragCutVersion"
+    $ui.InfoText.Text = "player: $(if ($st.Mpv) { 'mpv' } else { 'Windows' })   " + [char]0x00B7 + "   encoding: $(Get-EncoderName $st.Enc)"
+}
 function Looping { ($null -ne $st.Start) -and ($null -ne $st.End) -and ($st.End -gt $st.Start) }
 
 # ---------- player: mpv inside the window if it's installed, else Windows' built-in player ----------
@@ -228,7 +341,7 @@ function Check-Mpv {
 
 # ---------- recordings list: rounds > recordings > clips (Get-Library in Rounds.ps1) ----------
 $script:Brush = @{
-    Round = '#9aa0ff'; Rec = '#e8e8ea'; Loose = '#f0c040'; Clip = '#a6a6ae'; LooseClip = '#c9a640'
+    Round = '#b197fc'; Rec = '#e8e8ea'; Loose = '#f0c040'; Clip = '#a6a6ae'; LooseClip = '#c9a640'; Muted = '#8d8d97'
 }
 foreach ($k in @($script:Brush.Keys)) { $script:Brush[$k] = [Windows.Media.BrushConverter]::new().ConvertFromString($script:Brush[$k]) }
 
@@ -251,8 +364,14 @@ function Refresh-Library {
         elseif ($n.Kind -eq 'round') { foreach ($c in $n.Children) { if ($c.Kind -eq 'rec') { [void]$queue.Add($c.Path) } } }
     }
     $st.Index = if ($st.Video) { Index-Of $st.Video } else { -1 }
-    $ui.LibTitle.Text = if ($script:Root) { "Recordings - $(Split-Path $script:Root -Leaf)" } else { 'Recordings' }
-    $ui.LibTitle.ToolTip = $script:Root
+    if ($script:Root) { $ui.FolderName.Text = Split-Path $script:Root -Leaf; $ui.FolderPath.Text = $script:Root; $ui.BtnFolder.Content = 'Change folder' }
+    else { $ui.FolderName.Text = 'No folder chosen'; $ui.FolderPath.Text = 'pick the folder your recordings are saved in'; $ui.BtnFolder.Content = 'Choose folder' }
+    # recordings that aren't in a round yet
+    $loose = @($lib | Where-Object { $_.Kind -eq 'rec' }).Count
+    if ($loose) {
+        $ui.LooseText.Text = if ($loose -eq 1) { '1 recording not in a round yet' } else { "$loose recordings not in a round yet" }
+        $ui.LooseBar.Visibility = 'Visible'
+    } else { $ui.LooseBar.Visibility = 'Collapsed' }
     Render-Library
 }
 function Index-Of([string]$path) {
@@ -270,13 +389,43 @@ function Render-Library {
     $ui.Videos.Items.Clear()
     foreach ($n in $st.Lib) { Add-LibRow $n 0 }
     if ($script:CurItem) { $ui.Videos.SelectedItem = $script:CurItem; $ui.Videos.ScrollIntoView($script:CurItem) }
-    if (-not $st.Lib.Count) {
-        $it = New-Object Windows.Controls.ListBoxItem; $it.IsEnabled = $false
-        $it.Content = if ($script:Root) { "No recordings in $(Split-Path $script:Root -Leaf)" } else { 'Click "Set folder..." and pick the folder with your recordings.' }
-        [void]$ui.Videos.Items.Add($it)
+    if ($st.Lib.Count) { $ui.EmptyState.Visibility = 'Collapsed' }
+    else {
+        $ui.EmptyText.Text = if ($script:Root) { "No recordings in $(Split-Path $script:Root -Leaf) yet. Pick another folder?" } else { 'Pick the folder your recordings are saved in. FragCut opens it from then on.' }
+        $ui.BtnChooseFolder.Content = if ($script:Root) { 'Choose another folder' } else { 'Choose your recordings folder' }
+        $ui.EmptyState.Visibility = 'Visible'
     }
     $st.SyncingList = $false
 }
+# Short names for the list (the full path is in the tooltip)
+$script:Months = 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'
+function Round-Label([string]$name) {
+    if ($name -match '^(?<r>[A-Za-z0-9_]+-\d+) (?<y>\d{4})-(?<m>\d{2})-(?<d>\d{2})') { return '{0} {1} {2} {3}' -f $Matches.r, [char]0x00B7, [int]$Matches.d, $script:Months[[int]$Matches.m - 1] }
+    return $name
+}
+function Rec-Label($n) {
+    $name = $n.Name
+    $k = ''
+    if ($name -match '^[A-Za-z0-9_]+-\d+-(?<k>\d+) (?<rest>.+)$') { $k = $Matches.k; $name = $Matches.rest }
+    $game = if ($script:Root) { Split-Path $script:Root -Leaf } else { '' }
+    if ($game -and $name.StartsWith("$game ", [StringComparison]::OrdinalIgnoreCase)) { $name = $name.Substring($game.Length + 1) }
+    $name = $name -replace '(\d{2}\.\d{2}\.\d{2})\.\d{1,3}$', '$1'                       # NVIDIA: drop the hundredths
+    if ($k) {
+        # in a round the date is on the round line: show the time of day
+        if ($name -match '(?<t>\d{2})[.\-:](?<u>\d{2})[.\-:](?<v>\d{2})(\.\d+)?$') { $name = '{0}:{1}:{2}' -f $Matches.t, $Matches.u, $Matches.v }
+        return "#$k   $name"
+    }
+    return $name
+}
+function Clip-Label($n) {
+    $name = $n.Name
+    if ($name -match '(^| - |^[A-Za-z0-9_]+-\d+-\d+ )(?<c>clip \d+m\d+-\d+m\d+.*)$') { return $Matches.c }
+    $game = if ($script:Root) { Split-Path $script:Root -Leaf } else { '' }
+    if ($game -and $name.StartsWith("$game ", [StringComparison]::OrdinalIgnoreCase)) { $name = $name.Substring($game.Length + 1) }
+    return $name
+}
+function Count-Clips($n) { $c = 0; foreach ($x in $n.Children) { if ($x.Kind -eq 'clip') { $c++ }; $c += Count-Clips $x }; return $c }
+
 function Add-LibRow($n, [int]$depth) {
     if ($n.Kind -eq 'clip' -and -not $ui.ChkClips.IsChecked) { return }
     $it = New-Object Windows.Controls.ListBoxItem
@@ -288,7 +437,11 @@ function Add-LibRow($n, [int]$depth) {
         'round' {
             $open = [bool]$st.Expanded[$n.Path]
             $recs = @($n.Children | Where-Object { $_.Kind -eq 'rec' }).Count
-            $tb.Text = '{0} {1}   ({2})' -f $(if ($open) { [char]0x25BE } else { [char]0x25B8 }), $n.Name, $recs
+            $clips = Count-Clips $n
+            [void]$tb.Inlines.Add((New-Object Windows.Documents.Run(('{0}  {1}' -f $(if ($open) { [char]0x25BE } else { [char]0x25B8 }), (Round-Label $n.Name)))))
+            $more = New-Object Windows.Documents.Run(('    {0} rec{1}{2}' -f $recs, $(if ($recs -ne 1) { 's' } else { '' }), $(if ($clips) { ' {0} {1} clip{2}' -f [char]0x00B7, $clips, $(if ($clips -ne 1) { 's' } else { '' }) } else { '' })))
+            $more.Foreground = $script:Brush.Muted; $more.FontWeight = 'Normal'; $more.FontSize = 12
+            [void]$tb.Inlines.Add($more)
             $tb.Foreground = $script:Brush.Round; $tb.FontWeight = 'SemiBold'
             $it.ToolTip = if ($n.Path -eq '::extra') { 'Recordings opened from other folders' } else { "$($n.Path)`nClick to open or close" }
             # a plain click opens / closes the round instead of selecting it (Ctrl / Shift + click still selects it)
@@ -301,11 +454,11 @@ function Add-LibRow($n, [int]$depth) {
             })
         }
         'rec' {
-            $tb.Text = $n.Name
+            $tb.Text = Rec-Label $n
             $tb.Foreground = if ($n.Round) { $script:Brush.Rec } else { $script:Brush.Loose }
         }
         'clip' {
-            $tb.Text = $n.Name; $tb.FontStyle = 'Italic'
+            $tb.Text = Clip-Label $n; $tb.FontStyle = 'Italic'
             $tb.Foreground = if ($n.Round) { $script:Brush.Clip } else { $script:Brush.LooseClip }
         }
     }
@@ -616,7 +769,7 @@ function Cut-Slice {
     $paths = Get-SlicePaths $st.Video $a $b
     New-Item -ItemType File -Path $paths.Mp4 -Force | Out-Null   # reserve the name so quick cuts never collide
     $label = '{0} -> {1}{2}' -f (Short $a), (Short $b), $(if ($fast) { ' fast' } else { '' })
-    $clip = @{ Mp4 = $paths.Mp4; Mp3 = $paths.Mp3; Label = $label; Status = 'queued'; Mp3Note = ''; Saved = $false }
+    $clip = @{ Mp4 = $paths.Mp4; Mp3 = $paths.Mp3; Label = $label; Status = 'queued'; Mp3Note = ''; Saved = $false; Len = ($b - $a) }
     [void]$st.Clips.Add($clip)
     Render-Slices
     $ui.Slices.ScrollIntoView($ui.Slices.Items[$ui.Slices.Items.Count - 1])
@@ -688,7 +841,7 @@ function Add-ToClipList {
     foreach ($n in (Selected-Nodes)) {
         if ($n.Kind -ne 'clip' -and -not ($n.Kind -eq 'rec' -and (Test-MadeByFragCut (Split-Path $n.Path -Leaf)))) { continue }
         if (@($st.Clips | Where-Object { $_.Mp4 -ieq $n.Path }).Count) { continue }
-        [void]$st.Clips.Add(@{ Mp4 = $n.Path; Mp3 = [IO.Path]::ChangeExtension($n.Path, '.mp3'); Label = $n.Name; Status = ''; Mp3Note = ''; Saved = $true })
+        [void]$st.Clips.Add(@{ Mp4 = $n.Path; Mp3 = [IO.Path]::ChangeExtension($n.Path, '.mp3'); Label = $n.Name; Status = ''; Mp3Note = ''; Saved = $true; Len = $(try { Get-Duration $ffprobe $n.Path } catch { 0.0 }) })
     }
     Render-Slices
 }
@@ -796,7 +949,7 @@ function Set-KillButton {
         $txt = 'Finding kills {0:N0}%' -f ($sc.Progress * 100)
         if ($n) { $txt += "  ($n so far)" }
     }
-    elseif ($null -eq $st.Kills) { $txt = 'Find kills [K]' }
+    elseif ($null -eq $st.Kills) { $txt = 'Find kills  K' }
     elseif ($n -eq 0)            { $txt = 'No kills found' }
     elseif (On-KillClip)         { $txt = 'Kill {0} of {1}  [K next, Shift+K back]' -f ($st.KillIx + 1), $n }
     else                         { $txt = "$n kills - next [K]" }
@@ -1027,6 +1180,16 @@ $ui.Videos.Add_SelectionChanged({
     if ($n -is [hashtable] -and $n.Kind -ne 'round' -and $n.Path -ine $st.Video) { $script:LoadNext = $n.Path; Later { Load-Path $script:LoadNext } }   # the list is rebuilt: not inside its own event
 })
 $ui.BtnFolder.Add_Click({ Set-Folder })
+$ui.BtnChooseFolder.Add_Click({ Set-Folder })
+$ui.FolderBar.Add_MouseLeftButtonUp({ Set-Folder })
+$ui.LooseBar.Add_MouseLeftButtonUp({
+    # select the recordings that aren't in a round, ready for Make round
+    $st.SyncingList = $true
+    $ui.Videos.SelectedItems.Clear()
+    foreach ($it in $ui.Videos.Items) { if ($it.Tag -is [hashtable] -and $it.Tag.Kind -eq 'rec' -and -not $it.Tag.Round) { [void]$ui.Videos.SelectedItems.Add($it) } }
+    $st.SyncingList = $false
+    $ui.MarkText.Text = "$($ui.Videos.SelectedItems.Count) selected - Ctrl+click to change the selection, then Make round"
+})
 $ui.BtnRound.Add_Click({ Make-Round })
 $ui.BtnUndo.Add_Click({ Undo-Round })
 $ui.BtnDelete.Add_Click({ Delete-Selected })
@@ -1092,6 +1255,7 @@ $timer.Add_Tick({
         # loop the marked part
         if ((Looping) -and $st.Playing -and -not $st.Dragging -and $p -ge $st.End -and ([datetime]::Now - $st.LastSeekAt).TotalMilliseconds -gt 150) { Seek-To $st.Start; $p = $st.Start }
         if (-not $st.Dragging) { $ui.Seek.Value = $p }
+        $g = [string][char]$(if ($st.Playing) { 0xE769 } else { 0xE768 }); if ([string]$ui.BtnPlay.Content -ne $g) { $ui.BtnPlay.Content = $g }
         $ui.TimeText.Text = '{0} / {1}{2}' -f (Short $p), (Short $st.Dur), (Speed-Text)
         if ($null -ne $st.Start -and $null -eq $st.End) { Update-Marks }
         Check-Jobs
@@ -1259,6 +1423,36 @@ if ($LibTest) {
     $win.Add_ContentRendered({ $lt.Start() })
 }
 
+if ($ShotTest) {
+    # screenshot of the window (for checking the layout): opens a round, puts its clips on the clip list, saves a PNG to $ShotTest
+    $script:sstep = 0
+    $sh = New-Object Windows.Threading.DispatcherTimer
+    $sh.Interval = [TimeSpan]::FromMilliseconds(250)
+    $sh.Add_Tick({
+        $script:sstep++
+        if ($script:sstep -eq 4) {
+            $r = @($st.Lib | Where-Object { $_.Kind -eq 'round' -and (Count-Clips $_) -ge 2 })[0]
+            if ($r) {
+                $st.Expanded[$r.Path] = $true; Render-Library
+                $ui.Videos.SelectedItems.Clear(); foreach ($it in $ui.Videos.Items) { if ($it.Tag -is [hashtable] -and $it.Tag.Kind -eq 'clip' -and $it.Tag.Round -eq $r.Path) { [void]$ui.Videos.SelectedItems.Add($it) } }
+                Add-ToClipList
+                $rec = @($r.Children | Where-Object { $_.Kind -eq 'rec' })[0]; if ($rec) { Load-Path $rec.Path -Paused }
+            }
+        }
+        if ($script:sstep -eq 16) {
+            Add-Type -AssemblyName System.Drawing
+            $src = [Windows.PresentationSource]::FromVisual($win); $m = $src.CompositionTarget.TransformToDevice
+            $x = [int]($win.Left * $m.M11); $y = [int]($win.Top * $m.M22); $w = [int]($win.ActualWidth * $m.M11); $h = [int]($win.ActualHeight * $m.M22)
+            $bmp = New-Object Drawing.Bitmap $w, $h
+            $g = [Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($x, $y, 0, 0, $bmp.Size); $g.Dispose()
+            $bmp.Save($ShotTest, [Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+            Write-Host "SHOT $ShotTest"
+            $sh.Stop(); $win.Close()
+        }
+    })
+    $win.Add_ContentRendered({ $win.Activate(); $win.Topmost = $true; $sh.Start() })
+}
+
 if ($FastTest) {
     # automated check of fast cut: start snaps to a keyframe, Q/W step by keyframes, the clip is copied; prints results, then closes
     $script:fstep = 0; $script:flog = New-Object System.Collections.ArrayList
@@ -1336,12 +1530,12 @@ if ($PreviewTest) {
 }
 
 $win.Add_Loaded({
-    Start-Mpv; Set-Title
+    Start-Mpv; Set-Title; Render-Slices
     foreach ($f in $sentFiles) { [void]$script:Extra.Add($f) }   # shown in their own group if they're not in the folder
     Refresh-Library
     if ($sentFiles.Count) { Load-Path $sentFiles[0] }
     elseif ($queue.Count) { Load-Path $queue[$queue.Count - 1] -Paused }                    # the newest recording, paused
-    else { $ui.MarkText.Text = 'Click "Set folder..." on the right and pick the folder with your recordings' }
+    else { $ui.MarkText.Text = 'Choose the folder with your recordings (top bar)' }
     $timer.Start()
 })
 [void]$win.ShowDialog()
@@ -1349,4 +1543,4 @@ $win.Add_Loaded({
 # remove placeholders of slices that never finished
 foreach ($j in @($st.Jobs) + @($st.Running)) { if ($j -and $j.Kind -eq 'mp4') { try { $f = Get-Item -LiteralPath $j.Mp4 -EA Stop; if ($f.Length -eq 0) { Remove-Item -LiteralPath $j.Mp4 } } catch {} } }
 $saved = @($st.Clips | Where-Object { $_.Saved } | ForEach-Object { $_.Mp4 })
-if ($saved.Count -and -not $SelfTest -and -not $FastTest -and -not $RoundTest -and -not $GripTest -and -not $LibTest) { Show-InFolder $saved[$saved.Count - 1] }
+if ($saved.Count -and -not $SelfTest -and -not $FastTest -and -not $RoundTest -and -not $GripTest -and -not $LibTest -and -not $ShotTest) { Show-InFolder $saved[$saved.Count - 1] }

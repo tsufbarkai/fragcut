@@ -16,7 +16,7 @@ Requires Windows 10 or 11.
 2. Double-click `Install.bat`.
    - If Windows shows "Windows protected your PC", click **More info** and then **Run anyway**. This appears because FragCut isn't code-signed.
    - A window opens. It shows whether the two free programs FragCut uses are installed: **ffmpeg** (required, does the cutting) and **mpv** (recommended, plays the recordings, including AV1 and HEVC). Leave the missing ones ticked and click **Install**. ffmpeg is installed with `winget`. mpv is downloaded from its [official Windows builds](https://github.com/shinchiro/mpv-winbuild-cmake/releases) into FragCut's folder, after checking the file's published SHA-256 checksum.
-3. Open **FragCut** from the Desktop, click **Set folder...** and pick the folder your recordings are saved in (for example `Videos\NVIDIA\Battlefield 6`). FragCut opens that folder from then on.
+3. Open **FragCut** from the Desktop, click **Choose your recordings folder** and pick the folder your recordings are saved in (for example `Videos\NVIDIA\Battlefield 6`). FragCut opens that folder from then on.
    You can also right-click recordings or a folder and choose **Send to → FragCut**. On Windows 11, *Send to* is under **Show more options**, or hold Shift while right-clicking.
 
 FragCut installs into `%LOCALAPPDATA%\FragCut` and doesn't need admin rights.
@@ -25,7 +25,7 @@ To update, download the new zip and run `Install.bat` again. Your clips and sett
 
 ## Using FragCut
 
-Open FragCut. The list on the right shows the recordings in your folder, and the newest one is loaded. Click a recording to play it.
+Open FragCut. The bar at the top shows the folder it works in (**Change folder** to pick another). The Library on the right lists the recordings in that folder, and the newest one is loaded. Click a recording to play it.
 
 To save a clip:
 
@@ -34,11 +34,11 @@ To save a clip:
 3. If it's not quite right, move the start with `Q` / `W` and the end with `E` / `R`, or drag the ends of the orange bar above the timeline.
 4. Press `Enter` to save it. The video keeps playing, and the clip is saved in the background.
 
-Clips are saved in a `clips` folder next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** if you also want the audio as a separate file.
+Clips are saved in a `clips` folder next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also MP3** if you also want the audio as a separate file.
 
 ### Fast cut
 
-Normally each clip is encoded as H.264. If you tick **Fast cut (no re-encode)**, FragCut copies the clip out of the recording instead. It's saved in under a second, has the recording's quality, and takes the same space per second as the recording.
+Normally each clip is encoded as H.264. If you tick **Fast cut**, FragCut copies the clip out of the recording instead. It's saved in under a second, has the recording's quality, and takes the same space per second as the recording.
 
 A copied clip has to start on a keyframe (a full picture in the video). Recordings usually have one every 0.5 to 2 seconds; OBS can be set to longer. So with fast cut, the start mark moves back to the keyframe at or before where you pressed `I`, and `Q` / `W` move the start to the previous / next keyframe. The end can be anywhere.
 
@@ -64,14 +64,14 @@ All keys:
 
 You can also click the timeline to jump to a spot, or drag it. The orange bar above it shows the marked part; drag its left or right end to move the start or end.
 
-### The recordings list
+### The Library
 
-The list shows the folder you picked with **Set folder...**, oldest first:
+The Library lists the folder shown in the top bar, oldest first:
 
-- A round is one line, like `▸ BF6-12 2026-11-13 (2)`. Click it to open or close it. The round of the recording that plays opens by itself.
-- Recordings that aren't in a round yet are yellow.
-- With **Show clips** ticked, clips are listed in italics under the recording they were cut from. Montages are under their round, or at the end of the list. Click a clip to play it.
-- **Delete...** moves the selected recordings or clips to the Recycle Bin, after asking. A clip's MP3 goes with it.
+- A round is one line, like `▸ BF6-12 · 13 Nov   2 recs · 3 clips`. Click it to open or close it. The round of the recording that plays opens by itself. Its recordings are listed by number and time of day, like `#1  22:33:44`; the full file name is in the tooltip.
+- Recordings that aren't in a round yet are yellow, and the yellow line above the list counts them. Click that line to select them all, ready for **Make round...**.
+- With **Clips** ticked, clips are listed in italics under the recording they were cut from. Montages are under their round, or at the end of the list. Click a clip to play it.
+- The bin button moves the selected recordings or clips to the Recycle Bin, after asking. A clip's MP3 goes with it.
 - Right-click for **Play**, **Add to clip list**, **Make round...**, **Show in folder** and **Delete**.
 
 Ctrl+click or Shift+click selects several.
@@ -122,7 +122,7 @@ Clips you cut are added to the clip list at the bottom of the window. You can al
 - **Up** / **Down** change the order,
 - **Remove** takes a clip off the list and **Clear list** empties it (the files stay).
 
-Press `J` (or **Join slices**) to join the saved clips, top to bottom. It runs inside FragCut, and the list is emptied when it's done. The result is saved next to the clips as `<first recording> - montage.mp4`, or `BF6-12 montage.mp4` for a round.
+Press `J` (or **Join N clips**) to join the saved clips, top to bottom. It runs inside FragCut, and the list is emptied when it's done. The result is saved next to the clips as `<first recording> - montage.mp4`, or `BF6-12 montage.mp4` for a round.
 
 You can also select clips in Explorer and choose **Send to → FragCut - Join clips**. That opens a console window that lists the clips in the order they were recorded. Press Enter to keep that order, or type a different one, like `3 1 2` (leave a number out to skip that clip). The result is saved as `<first recording> - montage.mp4`.
 
@@ -145,13 +145,13 @@ FragCut saves clips as H.264, which plays everywhere and lets clips join without
 A copied clip can only start on a keyframe, so FragCut starts it on the last keyframe before your mark. The loop and the orange bar show the real start. To start exactly on your mark, turn fast cut off for that clip.
 
 **Which player does FragCut use?**
-mpv, if it's installed (the window title says "player: mpv"). It plays H.264, HEVC, AV1 and VP9 recordings and decodes them on the graphics card. Without mpv, FragCut uses the player built into Windows.
+mpv, if it's installed (the top bar says "player: mpv"). It plays H.264, HEVC, AV1 and VP9 recordings and decodes them on the graphics card. Without mpv, FragCut uses the player built into Windows.
 
 **It says "making a preview copy" when I open a recording.**
 This only happens without mpv. Windows' player can't play some recordings, often AV1 or HEVC (H.265). FragCut then makes an H.264 copy of the recording, up to 1080p, and plays that instead. It takes a few seconds for a short recording and several minutes for a long one, and is only made once. Clips are still cut from the original, so their quality isn't affected. The copies are kept in `%LOCALAPPDATA%\FragCut\preview` (the 8 most recent). To skip this, install mpv by running `Install.bat` again.
 
 **Does it use my graphics card?**
-Yes, if it can: NVIDIA, then AMD, then Intel. If none of them work, it uses the CPU, which is slower. The window title shows which one is used.
+Yes, if it can: NVIDIA, then AMD, then Intel. If none of them work, it uses the CPU, which is slower. The top bar shows which one is used.
 
 **Why does saving a clip take longer when OBS is open?**
 OBS and FragCut use the same video encoder on the graphics card. If FragCut saved at full speed, an OBS recording running at the same time could stutter. So while OBS is open, FragCut saves clips more slowly to leave room for it.

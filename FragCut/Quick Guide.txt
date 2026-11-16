@@ -14,7 +14,7 @@ INSTALL
      Leave the missing ones ticked and click Install. ffmpeg comes from winget; mpv is downloaded from its
      official Windows builds (github.com/shinchiro/mpv-winbuild-cmake) into FragCut's folder.
 3. Done. You get:
-   - "FragCut" on the Desktop. Open it, click "Set folder..." and pick the folder with your recordings
+   - "FragCut" on the Desktop. Open it, click "Choose your recordings folder" and pick the folder with your recordings
      (e.g. Videos\NVIDIA\Battlefield 6). It opens that folder from then on.
    - right-click a video > Send to > FragCut / FragCut - Join clips / FragCut - Cut by time / FragCut - Compress
      / FragCut - Kill montage
@@ -23,7 +23,8 @@ INSTALL
 
 FRAGCUT - watch, mark, cut
 --------------------------
-Open FragCut (or right-click recordings > Send to > FragCut). Click a recording in the list on the right.
+Open FragCut (or right-click recordings > Send to > FragCut). Click a recording in the Library on the right.
+The bar at the top shows the folder FragCut works in; "Change folder" picks another.
 The video plays. The flow:  I (start) -> O (end) -> the marked part loops -> fine-tune -> Enter.
 Slices save in the background (in a "clips" folder next to the recording) while you keep watching.
 
@@ -43,8 +44,8 @@ Slices save in the background (in a "clips" folder next to the recording) while 
   + / - ............ volume
 
   Click anywhere on the timeline to jump there, or drag it (pauses + mutes while dragging).
-  "Also save MP3" = also save the sound of each slice as an MP3.
-  "Fast cut (no re-encode)" = copy the slice out of the recording instead of encoding it: saved instantly,
+  "Also MP3" = also save the sound of each slice as an MP3.
+  "Fast cut" = copy the slice out of the recording instead of encoding it: saved instantly,
      original quality and size. It can only start on a keyframe, so the start moves back to the last one
      before your mark (usually 0.5-2 s), and Q / W move the start by one keyframe. The clip keeps the
      recording's format (AV1 / HEVC clips don't play everywhere).
@@ -54,11 +55,12 @@ Slices save in the background (in a "clips" folder next to the recording) while 
 
 THE RECORDINGS LIST
 -------------------
-Shows the folder picked with "Set folder...", oldest first.
+The Library shows the folder in the top bar, oldest first.
   > BF6-12 2026-11-13 (2) ...... a round: click to open / close it
   yellow ....................... a recording (or clip) that isn't in a round yet
-  italic ....................... clips ("Show clips"), under the recording they were cut from
-"Delete..." moves the selected recordings / clips to the Recycle Bin (it asks first; a clip's MP3 goes along).
+                                 (the yellow line above the list counts them - click it to select them)
+  italic ....................... clips ("Clips" ticked), under the recording they were cut from
+The bin button moves the selected recordings / clips to the Recycle Bin (it asks first; a clip's MP3 goes along).
 Right-click: Play, Add to clip list, Make round..., Show in folder, Delete. Ctrl / Shift + click selects several.
 
 ROUNDS
@@ -113,8 +115,8 @@ Select one or more videos > right-click > Send to > FragCut - Compress.
 GOOD TO KNOW
 ------------
 - Encoding uses your graphics card when it can (NVIDIA, AMD or Intel), otherwise the CPU (slower, same result).
-  The window title shows which one is used.
-- The player is mpv if it's installed (the window title says "player: mpv"); it plays H.264, HEVC, AV1 and VP9.
+  The top bar shows which one is used.
+- The player is mpv if it's installed (the top bar says "player: mpv"); it plays H.264, HEVC, AV1 and VP9.
   Without mpv, FragCut uses Windows' player. That one can't play some recordings (often AV1 or HEVC/H.265),
   so FragCut makes an H.264 "preview copy" to play, once per recording. Clips are still cut from the original.
   Install mpv to skip this: run Install.bat again.
