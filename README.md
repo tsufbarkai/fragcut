@@ -16,8 +16,8 @@ Requires Windows 10 or 11.
 2. Double-click `Install.bat`.
    - If Windows shows "Windows protected your PC", click **More info** and then **Run anyway**. This appears because FragCut isn't code-signed.
    - A window opens. It shows whether the two free programs FragCut uses are installed: **ffmpeg** (required, does the cutting) and **mpv** (recommended, plays the recordings, including AV1 and HEVC). Leave the missing ones ticked and click **Install**. ffmpeg is installed with `winget`. mpv is downloaded from its [official Windows builds](https://github.com/shinchiro/mpv-winbuild-cmake/releases) into FragCut's folder, after checking the file's published SHA-256 checksum.
-3. Right-click a recording and choose **Send to → FragCut**.
-   On Windows 11, *Send to* is under **Show more options**, or hold Shift while right-clicking.
+3. Open **FragCut** from the Desktop, click **Set folder...** and pick the folder your recordings are saved in (for example `Videos\NVIDIA\Battlefield 6`). FragCut opens that folder from then on.
+   You can also right-click recordings or a folder and choose **Send to → FragCut**. On Windows 11, *Send to* is under **Show more options**, or hold Shift while right-clicking.
 
 FragCut installs into `%LOCALAPPDATA%\FragCut` and doesn't need admin rights.
 
@@ -25,7 +25,7 @@ To update, download the new zip and run `Install.bat` again. Your clips and sett
 
 ## Using FragCut
 
-Right-click one or more recordings and choose **Send to → FragCut**. The video starts playing.
+Open FragCut. The list on the right shows the recordings in your folder, and the newest one is loaded. Click a recording to play it.
 
 To save a clip:
 
@@ -56,17 +56,27 @@ All keys:
 | `E` / `R` | move the end earlier / later by 0.2 s (with `Shift`: 1 s) |
 | `Enter` or `C` | save the clip (if only a start is marked, it cuts up to the current position) |
 | `Esc` | clear the marks |
-| `J` | join the clips you saved |
+| `J` | join the clips in the clip list |
 | `K` | find kills (Battlefield 6), then jump to the next kill (`Shift+K`: previous) |
 | `P` / `N` | previous / next recording |
 | `↑` / `↓` | playback speed (0.25x to 4x) |
 | `+` / `-` | volume |
 
-You can also click the timeline to jump to a spot, or drag it. The orange bar above it shows the marked part; drag its left or right end to move the start or end. If you opened several recordings, they're listed on the right; click one to switch.
+You can also click the timeline to jump to a spot, or drag it. The orange bar above it shows the marked part; drag its left or right end to move the start or end.
 
-### Folders and rounds
+### The recordings list
 
-**Open folder...** lists all recordings in a folder, oldest first. You can also right-click a folder and choose **Send to → FragCut**.
+The list shows the folder you picked with **Set folder...**, oldest first:
+
+- A round is one line, like `▸ BF6-12 2026-11-13 (2)`. Click it to open or close it. The round of the recording that plays opens by itself.
+- Recordings that aren't in a round yet are yellow.
+- With **Show clips** ticked, clips are listed in italics under the recording they were cut from. Montages are under their round, or at the end of the list. Click a clip to play it.
+- **Delete...** moves the selected recordings or clips to the Recycle Bin, after asking. A clip's MP3 goes with it.
+- Right-click for **Play**, **Add to clip list**, **Make round...**, **Show in folder** and **Delete**.
+
+Ctrl+click or Shift+click selects several.
+
+### Rounds
 
 To keep the recordings of one game round together, select them in the list (Ctrl+click or Shift+click) and click **Make round...**. FragCut asks for a short game tag, like `BF6`, and suggests the next round number. It shows the new names before anything is moved. Then it:
 
@@ -106,9 +116,15 @@ Kills close together share one clip, so a double kill isn't repeated or cut shor
 
 ### Joining clips
 
-Press `J` in FragCut, or select clips in Explorer and choose **Send to → FragCut - Join clips**.
+Clips you cut are added to the clip list at the bottom of the window. You can also add older clips: right-click them in the recordings list and choose **Add to clip list**. In the clip list:
 
-It lists the clips in the order they were recorded. Press Enter to keep that order, or type a different one, like `3 1 2` (leave a number out to skip that clip). The result is saved as `<first recording> - montage.mp4`.
+- **Play** (or double-click) plays a clip,
+- **Up** / **Down** change the order,
+- **Remove** takes a clip off the list and **Clear list** empties it (the files stay).
+
+Press `J` (or **Join slices**) to join the saved clips, top to bottom. It runs inside FragCut, and the list is emptied when it's done. The result is saved next to the clips as `<first recording> - montage.mp4`, or `BF6-12 montage.mp4` for a round.
+
+You can also select clips in Explorer and choose **Send to → FragCut - Join clips**. That opens a console window that lists the clips in the order they were recorded. Press Enter to keep that order, or type a different one, like `3 1 2` (leave a number out to skip that clip). The result is saved as `<first recording> - montage.mp4`.
 
 Clips made by FragCut are joined without re-encoding, so it takes a second and the quality doesn't change. This also works for fast-cut clips from recordings with the same settings. Clips with different resolutions, frame rates or formats (for example a fast-cut AV1 clip and an H.264 clip) are re-encoded so they fit together.
 
@@ -159,7 +175,7 @@ Every clip is encoded with the same settings (H.264 High profile level 5.2, AAC 
 |---|---|
 | `FragCut.ps1` | the player: watch, mark, cut |
 | `Mpv.ps1` | runs mpv inside the player window |
-| `Rounds.ps1` | Open folder, Make round and Undo round (moves and renames files, keeps a log in `%LOCALAPPDATA%\FragCut\rounds-log.json`) |
+| `Rounds.ps1` | the recordings list (rounds, recordings, clips), Make round and Undo round (moves and renames files, keeps a log in `%LOCALAPPDATA%\FragCut\rounds-log.json`), Delete |
 | `Join.ps1` | join clips |
 | `TimeCut.ps1` | cut by typed times |
 | `Compress.ps1` | make a smaller copy of a video |

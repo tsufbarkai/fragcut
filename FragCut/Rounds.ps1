@@ -291,3 +291,81 @@ function Update-RoundDialog {
     $d.Ok.IsEnabled = -not $exists
     $d.Plan = $p
 }
+
+# ---------- library: what the recordings list shows ----------
+# Nodes: @{ Kind = 'round' | 'rec' | 'clip'; Path; Name; Round = round folder or $null; Time; Children }
+# Rounds hold their recordings; recordings hold the clips cut from them; clips that match no recording
+# (montages ...) sit in the round, or at the end for the folder itself.
+function New-LibNode([string]$kind, [string]$path, [string]$name, $round) {
+    return @{ Kind = $kind; Path = $path; Name = $name; Round = $round; Time = [datetime]::MinValue; Children = (New-Object System.Collections.ArrayList) }
+}
+function Get-Library($root) {
+    $top = New-Object System.Collections.ArrayList
+    $loose = New-Object System.Collections.ArrayList
+    if (-not $root -or -not (Test-Path -LiteralPath $root -PathType Container)) { return ,$top }
+    $groups = New-Object System.Collections.ArrayList
+    [void]$groups.Add(@{ Dir = $root; Round = $null })
+    foreach ($d in (Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
+        if ($d.Name -match '^[A-Za-z0-9_]+-\d+( |$)') { [void]$groups.Add(@{ Dir = $d.FullName; Round = $d.FullName }) }
+    }
+    foreach ($g in $groups) {
+        $files = @(Get-ChildItem -LiteralPath $g.Dir -File -ErrorAction SilentlyContinue)
+        $recs = @($files | Where-Object { $script:VideoExt -contains $_.Extension.ToLowerInvariant() -and -not (Test-MadeByFragCut $_.Name) })
+        $clips = New-Object System.Collections.ArrayList
+        foreach ($f in $files) { if ($f.Extension -ieq '.mp4' -and (Test-MadeByFragCut $f.Name)) { [void]$clips.Add($f.FullName) } }
+        $cd = Join-Path $g.Dir 'clips'
+        if (Test-Path -LiteralPath $cd -PathType Container) {
+            foreach ($f in (Get-ChildItem -LiteralPath $cd -File -Filter '*.mp4' -ErrorAction SilentlyContinue)) { [void]$clips.Add($f.FullName) }
+        }
+        $clips = [System.Collections.ArrayList]@($clips | Sort-Object { Get-NaturalKey (Split-Path $_ -Leaf) })
+        $recNodes = New-Object System.Collections.ArrayList
+        foreach ($r in $recs) {
+            $n = New-LibNode 'rec' $r.FullName (([IO.Path]::GetFileNameWithoutExtension($r.Name)) -replace '\.DVR$', '') $g.Round
+            $n.Time = Get-RecordTime $r.FullName
+            $base = (Get-ClipBase $r.FullName) + ' '
+            foreach ($c in @($clips)) {
+                if ((Split-Path $c -Leaf).StartsWith($base, [StringComparison]::OrdinalIgnoreCase)) {
+                    [void]$n.Children.Add((New-LibNode 'clip' $c ([IO.Path]::GetFileNameWithoutExtension($c)) $g.Round)); $clips.Remove($c)
+                }
+            }
+            [void]$recNodes.Add($n)
+        }
+        $recNodes = @($recNodes | Sort-Object { $_.Time })
+        $left = @($clips | ForEach-Object { New-LibNode 'clip' $_ ([IO.Path]::GetFileNameWithoutExtension($_)) $g.Round })
+        if ($g.Round) {
+            if (-not $recNodes.Count -and -not $left.Count) { continue }
+            $rn = New-LibNode 'round' $g.Dir (Split-Path $g.Dir -Leaf) $g.Dir
+            $rn.Time = if ($recNodes.Count) { $recNodes[0].Time } else { (Get-Item -LiteralPath $g.Dir).CreationTime }
+            foreach ($x in @($recNodes) + @($left)) { if ($x) { [void]$rn.Children.Add($x) } }
+            [void]$top.Add($rn)
+        } else {
+            foreach ($x in $recNodes) { if ($x) { [void]$top.Add($x) } }
+            foreach ($x in $left) { if ($x) { [void]$loose.Add($x) } }
+        }
+    }
+    $sorted = New-Object System.Collections.ArrayList
+    foreach ($x in @($top | Sort-Object { $_.Time })) { [void]$sorted.Add($x) }
+    foreach ($x in $loose) { [void]$sorted.Add($x) }
+    return ,$sorted
+}
+
+# Files to the Recycle Bin (a clip takes its MP3 along). Retries briefly while a player lets go of a file.
+function Remove-ToRecycleBin($paths) {
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    $done = New-Object System.Collections.ArrayList
+    foreach ($p in $paths) {
+        $all = @($p)
+        $mp3 = [IO.Path]::ChangeExtension($p, '.mp3')
+        if ((Test-MadeByFragCut (Split-Path $p -Leaf)) -and (Test-Path -LiteralPath $mp3)) { $all += $mp3 }
+        foreach ($f in $all) {
+            if (-not (Test-Path -LiteralPath $f)) { continue }
+            $tries = 0
+            while ($true) {
+                try { [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($f, 'OnlyErrorDialogs', 'SendToRecycleBin'); break }
+                catch { if (++$tries -ge 20) { throw "Couldn't delete $(Split-Path $f -Leaf): $($_.Exception.Message)" }; Start-Sleep -Milliseconds 150 }
+            }
+            [void]$done.Add($f)
+        }
+    }
+    return ,$done
+}

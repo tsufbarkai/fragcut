@@ -1,7 +1,7 @@
 FRAGCUT - QUICK GUIDE
 =====================
 Cut the best moments out of your game recordings and stitch them into one video.
-Right-click a recording, watch, press I / O / C. Free, no account, nothing runs in the background.
+Open FragCut, pick a recording, watch, press I / O / C. Free, no account, nothing runs in the background.
 
 
 INSTALL
@@ -14,17 +14,18 @@ INSTALL
      Leave the missing ones ticked and click Install. ffmpeg comes from winget; mpv is downloaded from its
      official Windows builds (github.com/shinchiro/mpv-winbuild-cmake) into FragCut's folder.
 3. Done. You get:
+   - "FragCut" on the Desktop. Open it, click "Set folder..." and pick the folder with your recordings
+     (e.g. Videos\NVIDIA\Battlefield 6). It opens that folder from then on.
    - right-click a video > Send to > FragCut / FragCut - Join clips / FragCut - Cut by time / FragCut - Compress
      / FragCut - Kill montage
-   - "FragCut" on the Desktop
    Windows 11: "Send to" is under "Show more options" (or hold Shift while right-clicking).
 
 
 FRAGCUT - watch, mark, cut
 --------------------------
-Select one or more recordings > right-click > Send to > FragCut.
+Open FragCut (or right-click recordings > Send to > FragCut). Click a recording in the list on the right.
 The video plays. The flow:  I (start) -> O (end) -> the marked part loops -> fine-tune -> Enter.
-Slices save in the background (next to the recording) while you keep watching.
+Slices save in the background (in a "clips" folder next to the recording) while you keep watching.
 
   Space ............ play / pause
   Left / Right ..... back / forward 0.5 s   (Shift = 5 s, Ctrl = 30 s)
@@ -36,13 +37,12 @@ Slices save in the background (next to the recording) while you keep watching.
   Enter or C ....... cut the slice and keep watching   (only a start marked = cut up to now)
   Esc .............. clear the marks
   P / N ............ previous / next recording
-  J ................ join the slices you cut into one video
+  J ................ join the clips in the clip list into one video
   K ................ find kills (Battlefield 6), then jump to the next kill   (Shift+K = previous)
   Up / Down ........ playback speed: 0.25x, 0.5x, 1x, 2x, 4x
   + / - ............ volume
 
   Click anywhere on the timeline to jump there, or drag it (pauses + mutes while dragging).
-  Opened several recordings? They're listed on the right - click one to switch.
   "Also save MP3" = also save the sound of each slice as an MP3.
   "Fast cut (no re-encode)" = copy the slice out of the recording instead of encoding it: saved instantly,
      original quality and size. It can only start on a keyframe, so the start moves back to the last one
@@ -52,9 +52,17 @@ Slices save in the background (next to the recording) while you keep watching.
   Slices are saved in a "clips" folder next to the recording, named like:  <recording> - clip 01m38-01m43.mp4
 
 
-FOLDERS AND ROUNDS
-------------------
-"Open folder..." lists all recordings in a folder, oldest first (or right-click a folder > Send to > FragCut).
+THE RECORDINGS LIST
+-------------------
+Shows the folder picked with "Set folder...", oldest first.
+  > BF6-12 2026-11-13 (2) ...... a round: click to open / close it
+  yellow ....................... a recording (or clip) that isn't in a round yet
+  italic ....................... clips ("Show clips"), under the recording they were cut from
+"Delete..." moves the selected recordings / clips to the Recycle Bin (it asks first; a clip's MP3 goes along).
+Right-click: Play, Add to clip list, Make round..., Show in folder, Delete. Ctrl / Shift + click selects several.
+
+ROUNDS
+------
 To keep one game round together: select its recordings in the list (Ctrl+click / Shift+click) > "Make round...".
 Type a short game tag (BF6, APEX ...); FragCut suggests the next round number and shows the new names first.
   BF6-12 2026-11-13\                       the round's folder (tag, round number, date)
@@ -77,9 +85,11 @@ Finds the kills, takes 5 s before to 1 s after each, and joins them into
 
 JOIN CLIPS - stitch slices together
 -----------------------------------
-Press J in FragCut, or select slices in Explorer > right-click > Send to > FragCut - Join clips.
-- Lists the slices in recording order. Press Enter to keep it, or type a new order: 3 1 2
-  (leave a number out to skip that slice).
+In FragCut: clips you cut go into the clip list at the bottom (older ones: right-click them in the
+recordings list > Add to clip list). Play / Up / Down / Remove / Clear list, then press J: the saved clips
+are joined top to bottom, inside FragCut, and the list is emptied.
+From Explorer: select slices > right-click > Send to > FragCut - Join clips. A console lists them in
+recording order. Press Enter to keep it, or type a new order: 3 1 2 (leave a number out to skip that slice).
 - Slices made by FragCut join instantly with no quality loss.
 - Slices with different resolution / fps are re-encoded automatically.
 - Saved as:  <first recording> - montage.mp4   (optionally + MP3)

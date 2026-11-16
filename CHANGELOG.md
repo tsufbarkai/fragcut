@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.8.0
+
+- **FragCut opens without asking for files.** It shows the folder you pick with **Set folder...** (it remembers it).
+  Until you pick one, it shows the folder you used last. *Send to > FragCut* on files or a folder works as before.
+- **The recordings list shows rounds**: each round is a line you click to open or close, with its recordings under it.
+  The round of the recording that plays opens by itself. Recordings that aren't in a round yet are yellow.
+- **Show clips**: clips appear in italics under the recording they were cut from (montages under their round,
+  or at the end). Click one to play it.
+- **Delete...** (or right-click > Delete) moves the selected recordings or clips to the Recycle Bin, after asking.
+  A clip's MP3 goes with it.
+- **Right-click menu** on the list: Play, Add to clip list, Make round, Show in folder, Delete.
+- **Clip list at the bottom**: Play (or double-click), Up / Down to change the order, Remove, Clear list.
+  Join [J] joins the saved clips in that order inside FragCut, without the console window and its questions, and then
+  empties the list. Clips from the recordings list can be added with right-click > Add to clip list.
+
 ## 1.7.1
 
 - **Drag the start and end with the mouse**: the orange bar above the timeline has a handle at each end. Drag the

@@ -2,12 +2,15 @@
 # Usage: select clips in Explorer > right-click > Send to > FragCut - Join clips  (or run with no files to pick them).
 # Slices made by FragCut share the same format, so they are joined instantly with no quality
 # loss. Clips with a different format (resolution, fps, codec) are re-encoded on the GPU instead.
-# Test switches: -Order "2 1 3"  -Mp3 / -NoMp3  -NoOpen  -NoPause
+# Switches: -Order "2 1 3"  -KeepOrder (join in the order given, no questions)  -Mp3 / -NoMp3  -NoOpen  -NoPause
+#           -ResultFile <path>: writes "OK|<montage path>" or "ERR|<message>" there (FragCut joins in the background this way)
 
 [CmdletBinding(PositionalBinding = $false)]   # every file name goes into $Files, never into -Order
 param(
     [Parameter(ValueFromRemainingArguments = $true)][string[]]$Files,
     [string]$Order,
+    [switch]$KeepOrder,
+    [string]$ResultFile,
     [switch]$Mp3,
     [switch]$NoMp3,
     [switch]$NoOpen,
@@ -18,6 +21,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
 
 function Done { if (-not $NoPause) { Read-Host "`nPress Enter to close" | Out-Null } }
+function Write-Result([string]$text) { if ($ResultFile) { try { [IO.File]::WriteAllText($ResultFile, $text) } catch {} } }
 
 function Probe($ffprobe, $file) {
     $j = (& $ffprobe -v error -show_entries 'stream=codec_type,codec_name,profile,level,width,height,r_frame_rate,pix_fmt,sample_rate,channels:format=duration' -of json "$file") -join "`n" | ConvertFrom-Json
@@ -42,6 +46,7 @@ try {
     $ffprobe = Find-Tool 'ffprobe'
 
     $list = @($Files | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } | ForEach-Object { (Resolve-Path -LiteralPath $_).Path })
+    if ($list.Count -lt 2 -and $KeepOrder) { throw 'at least 2 clips are needed' }
     if ($list.Count -lt 2) {
         Add-Type -AssemblyName System.Windows.Forms
         $dlg = New-Object System.Windows.Forms.OpenFileDialog
@@ -56,14 +61,14 @@ try {
     if ($list.Count -lt 2) { Write-Host 'Pick at least 2 clips.' -ForegroundColor Yellow; Done; exit }
 
     # default order = file name, which for NVIDIA recordings is the recording date/time
-    $list = @($list | Sort-Object { Get-NaturalKey (Split-Path $_ -Leaf) })
+    if (-not $KeepOrder) { $list = @($list | Sort-Object { Get-NaturalKey (Split-Path $_ -Leaf) }) }
 
     Write-Host "`nFragCut $FragCutVersion - Join" -ForegroundColor DarkGray
     Write-Host 'Clips (in recording order):' -ForegroundColor Cyan
     for ($i = 0; $i -lt $list.Count; $i++) { Write-Host ("  {0}. {1}" -f ($i + 1), (Split-Path $list[$i] -Leaf)) }
 
     while ($true) {
-        $ans = if ($PSBoundParameters.ContainsKey('Order')) { $Order } else { Read-Host "`nEnter = keep this order, or type a new order (e.g. 3 1 2; leave numbers out to skip clips)" }
+        $ans = if ($KeepOrder) { '' } elseif ($PSBoundParameters.ContainsKey('Order')) { $Order } else { Read-Host "`nEnter = keep this order, or type a new order (e.g. 3 1 2; leave numbers out to skip clips)" }
         if ($ans.Trim() -eq '') { break }
         $nums = @($ans -split '[\s,]+' | Where-Object { $_ } | ForEach-Object { [int]$_ })
         $bad = @($nums | Where-Object { $_ -lt 1 -or $_ -gt $list.Count })
@@ -130,7 +135,7 @@ try {
         }
     }
 
-    if (-not $ok) { Write-Host '  Join failed.' -ForegroundColor Red; Done; exit 1 }
+    if (-not $ok) { Write-Result 'ERR|ffmpeg could not join the clips'; Write-Host '  Join failed.' -ForegroundColor Red; Done; exit 1 }
     Write-Host ("  saved: {0}  ({1:N1} MB, {2:N1} s)" -f (Split-Path $out -Leaf), ((Get-Item -LiteralPath $out).Length / 1MB), $sw.Elapsed.TotalSeconds) -ForegroundColor Green
 
     if ($wantMp3) {
@@ -139,10 +144,12 @@ try {
         if ($LASTEXITCODE -eq 0) { Write-Host "  saved: $(Split-Path $mp3File -Leaf)" -ForegroundColor Green } else { Write-Host '  MP3 failed.' -ForegroundColor Red }
     }
 
+    Write-Result "OK|$out"
     if (-not $NoOpen) { Show-InFolder $out }
     if (-not $NoPause) { Start-Sleep -Seconds 2 }
 }
 catch {
+    Write-Result "ERR|$($_.Exception.Message)"
     Write-Host "`nError: $($_.Exception.Message)" -ForegroundColor Red
     Done
 }
