@@ -1,7 +1,7 @@
 ﻿# FragCut - shared helpers (dot-sourced by FragCut.ps1, Join.ps1, TimeCut.ps1, Compress.ps1 and KillScan.ps1).
 # https://github.com/tsufbarkai/fragcut
 
-$FragCutVersion = '1.5.1'
+$FragCutVersion = '1.6.0'
 $script:Inv = [Globalization.CultureInfo]::InvariantCulture
 $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'FragCut\settings.json'
 
@@ -184,6 +184,71 @@ function Get-CutArgs($video, [double]$start, [double]$len, $mp4, [string]$enc, [
     if ($Gentle) { $a += @('-vf','realtime=speed=1.5') }
     $a += Get-VideoEncArgs $enc -Gentle:$Gentle -Cap $Cap
     $a += @('-pix_fmt','yuv420p','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-movflags','+faststart',$mp4)
+    return $a
+}
+
+# ---------- fast cut: copy the video as it is, no re-encoding ----------
+# A copied clip can only start on a keyframe (a full picture; recordings have one every 0.5-2 s, OBS up to 10 s),
+# so FragCut moves the start back to the keyframe at or before the mark. The end can be anywhere.
+# Keyframe times are read with ffprobe in 30-second chunks and remembered.
+$script:KeyChunks = @{}
+$script:KeyChunk = 30.0
+function Get-KeyChunk($video, [int]$n) {
+    $id = "$video|$n"
+    if ($script:KeyChunks.ContainsKey($id)) { return $script:KeyChunks[$id] }
+    if (-not $script:FfprobeExe) { $script:FfprobeExe = Find-Tool 'ffprobe' }
+    $from = $n * $script:KeyChunk; $to = $from + $script:KeyChunk + 0.1
+    $iv = '{0}%{1}' -f $from.ToString('0.###', $script:Inv), $to.ToString('0.###', $script:Inv)
+    $keys = New-Object System.Collections.Generic.List[double]
+    foreach ($l in (& $script:FfprobeExe -v quiet -select_streams v:0 -read_intervals $iv -show_entries packet=pts_time,flags -of csv=p=0 "$video")) {
+        $p = "$l" -split ','
+        $x = 0.0
+        if ($p.Count -ge 2 -and $p[1].StartsWith('K') -and [double]::TryParse($p[0], [Globalization.NumberStyles]::Float, $script:Inv, [ref]$x)) { $keys.Add($x) }
+    }
+    $arr = @($keys | Sort-Object -Unique)
+    $script:KeyChunks[$id] = $arr
+    return $arr
+}
+# The keyframe at or before $t (0 if none found).
+function Get-KeyframeBefore($video, [double]$t) {
+    for ($n = [int][math]::Floor([math]::Max(0.0, $t) / $script:KeyChunk); $n -ge 0; $n--) {
+        $k = @(Get-KeyChunk $video $n | Where-Object { $_ -le $t + 0.002 })
+        if ($k.Count) { return [math]::Max(0.0, $k[-1]) }
+    }
+    return 0.0
+}
+# The first keyframe after $t, or $null if there is none before $limit.
+function Get-KeyframeAfter($video, [double]$t, [double]$limit) {
+    for ($n = [int][math]::Floor([math]::Max(0.0, $t) / $script:KeyChunk); $n * $script:KeyChunk -lt $limit; $n++) {
+        $k = @(Get-KeyChunk $video $n | Where-Object { $_ -gt $t + 0.002 -and $_ -lt $limit })
+        if ($k.Count) { return $k[0] }
+        if ($n -gt 1000) { break }
+    }
+    return $null
+}
+
+$script:CodecCache = @{}
+function Get-Codecs($video) {
+    if ($script:CodecCache.ContainsKey($video)) { return $script:CodecCache[$video] }
+    if (-not $script:FfprobeExe) { $script:FfprobeExe = Find-Tool 'ffprobe' }
+    $v = "$(& $script:FfprobeExe -v quiet -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$video" | Select-Object -First 1)".Trim()
+    $a = "$(& $script:FfprobeExe -v quiet -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$video" | Select-Object -First 1)".Trim()
+    $c = @{ Video = $v; Audio = $a }
+    $script:CodecCache[$video] = $c
+    return $c
+}
+
+# $start should be a keyframe (Get-KeyframeBefore); ffmpeg starts the copy at the keyframe at or before it anyway.
+# Seeking 1 ms past the keyframe makes sure ffmpeg lands on that keyframe and not the one before.
+function Get-CopyCutArgs($video, [double]$start, [double]$len, $mp4) {
+    $c = Get-Codecs $video
+    $ss = $start + 0.001
+    $a = @('-hide_banner','-loglevel','error','-y','-ss',$ss.ToString('0.######', $script:Inv),'-i',$video,'-t',[math]::Max(0.05, $len - 0.001).ToString('0.######', $script:Inv),
+           '-map','0:v:0','-map','0:a:0?','-c:v','copy')
+    if ($c.Video -eq 'hevc') { $a += @('-tag:v','hvc1') }
+    if ($c.Audio -in 'aac','mp3','opus','ac3','eac3','flac','alac') { $a += @('-c:a','copy') }
+    else { $a += @('-c:a','aac','-b:a','192k','-ar','48000','-ac','2') }
+    $a += @('-avoid_negative_ts','make_zero','-movflags','+faststart',$mp4)
     return $a
 }
 

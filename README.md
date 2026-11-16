@@ -36,6 +36,14 @@ To save a clip:
 
 Clips are saved next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** if you also want the audio as a separate file.
 
+### Fast cut
+
+Normally each clip is encoded as H.264. If you tick **Fast cut (no re-encode)**, FragCut copies the clip out of the recording instead. It's saved in under a second, has the recording's quality, and takes the same space per second as the recording.
+
+A copied clip has to start on a keyframe (a full picture in the video). Recordings usually have one every 0.5 to 2 seconds; OBS can be set to longer. So with fast cut, the start mark moves back to the keyframe at or before where you pressed `I`, and `Q` / `W` move the start to the previous / next keyframe. The end can be anywhere.
+
+The clip stays in the recording's format. If you record in AV1 or HEVC, the clip is AV1 or HEVC too, and some apps (and Windows' own player) can't play it. Leave fast cut off for clips you want to share widely.
+
 All keys:
 
 | Key | What it does |
@@ -78,7 +86,7 @@ Press `J` in FragCut, or select clips in Explorer and choose **Send to → FragC
 
 It lists the clips in the order they were recorded. Press Enter to keep that order, or type a different one, like `3 1 2` (leave a number out to skip that clip). The result is saved as `<first recording> - montage.mp4`.
 
-Clips made by FragCut are joined without re-encoding, so it takes a second and the quality doesn't change. Clips with different resolutions or frame rates are re-encoded so they fit together.
+Clips made by FragCut are joined without re-encoding, so it takes a second and the quality doesn't change. This also works for fast-cut clips from recordings with the same settings. Clips with different resolutions, frame rates or formats (for example a fast-cut AV1 clip and an H.264 clip) are re-encoded so they fit together.
 
 ### Cutting by typed times
 
@@ -92,6 +100,9 @@ Select one or more videos and choose **Send to → FragCut - Compress**. It save
 
 **Why is a clip bigger per second than my recording?**
 FragCut saves clips as H.264, which plays everywhere and lets clips join without re-encoding. If you record in AV1 or HEVC, H.264 needs more data for the same picture, so a clip may use up to 1.5 times the recording's bitrate (1.2 times for H.264 recordings, never more than 40 Mbit/s). In a test on a 1440p60 AV1 recording, clips at that limit scored 97.9 out of 100 (VMAF) against the original.
+
+**Why does a fast-cut clip start a bit before my mark?**
+A copied clip can only start on a keyframe, so FragCut starts it on the last keyframe before your mark. The loop and the orange bar show the real start. To start exactly on your mark, turn fast cut off for that clip.
 
 **Which player does FragCut use?**
 mpv, if it's installed (the window title says "player: mpv"). It plays H.264, HEVC, AV1 and VP9 recordings and decodes them on the graphics card. Without mpv, FragCut uses the player built into Windows.

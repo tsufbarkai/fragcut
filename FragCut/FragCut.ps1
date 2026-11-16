@@ -12,7 +12,7 @@
 # Slices are saved next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
 
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest)
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
@@ -87,6 +87,8 @@ if ($queue.Count -eq 0) { exit }
       <Button x:Name="BtnJoin"  Content="Join slices [J]" Background="#2f9e44"/>
       <Button x:Name="BtnKills" Content="Find kills [K]" Background="#a61e4d" ToolTip="Battlefield 6: finds the kills in this recording. Then K = next kill, Shift+K = previous."/>
       <CheckBox x:Name="ChkMp3" Content="Also save MP3" VerticalAlignment="Center" Margin="6,0,0,6"/>
+      <CheckBox x:Name="ChkFast" Content="Fast cut (no re-encode)" VerticalAlignment="Center" Margin="12,0,0,6"
+                ToolTip="Copies the video as it is: instant, original quality and size per second, same format as the recording. The clip starts on the nearest full picture (keyframe) before your mark, usually up to 0.5-2 s earlier. Clips stay in the recording's format (AV1 / HEVC clips may not play everywhere)."/>
     </WrapPanel>
     <ListBox x:Name="Slices" Grid.Row="6" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False" FontFamily="Consolas"/>
 
@@ -107,7 +109,7 @@ if ($queue.Count -eq 0) { exit }
 
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 $ui = @{}
-foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
+foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','ChkFast','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
 
 $st = @{
     Index = -1; Video = $null; Dur = 0.0; Playing = $false
@@ -255,9 +257,13 @@ function Toggle-Play { if ($st.Playing) { Pause-Video } else { Play } }
 function Step([double]$d) { if ($st.Playing) { Pause-Video }; Seek-To ((Base-Pos) + $d) }
 
 # ---------- marks ----------
+function Fast { [bool]$ui.ChkFast.IsChecked }
+# Fast cut: a copied clip starts on a keyframe, so the start mark moves to the keyframe at or before it.
+function Snap-Start([double]$t) { if ((Fast) -and $st.Video) { return (Get-KeyframeBefore $st.Video $t) } else { return $t } }
+
 function Update-Marks {
     if (Looping) {
-        $ui.MarkText.Text = ('LOOP {0} -> {1}  ({2:N1} s)   Enter = cut   Q/W start  E/R end   Esc = cancel' -f (Short $st.Start), (Short $st.End), ($st.End - $st.Start))
+        $ui.MarkText.Text = ('{3}LOOP {0} -> {1}  ({2:N1} s)   Enter = cut   Q/W start  E/R end   Esc = cancel' -f (Short $st.Start), (Short $st.End), ($st.End - $st.Start), $(if (Fast) { 'FAST ' } else { '' }))
     } else {
         $s = if ($null -ne $st.Start) { Short $st.Start } else { '--' }
         $e = if ($null -ne $st.End)   { Short $st.End }   else { '--' }
@@ -274,7 +280,7 @@ function Update-Marks {
 function Start-Loop { Seek-To $st.Start; Play; Update-Marks }
 
 function Mark-Start {
-    $st.Start = Base-Pos
+    $st.Start = Snap-Start (Base-Pos)
     if ($null -ne $st.End -and $st.End -le $st.Start + 0.05) { $st.End = $null }
     if (Looping) { Start-Loop } else { Update-Marks }
 }
@@ -289,7 +295,12 @@ function Clear-Marks { $st.Start = $null; $st.End = $null; Update-Marks }
 # Q/W/E/R: move the start or end of the marked part, then replay that edge.
 function Nudge([string]$which, [double]$d) {
     if (-not (Looping)) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'Mark a start [I] and an end [O] first'; return }
-    if ($which -eq 'start') {
+    if ($which -eq 'start' -and (Fast)) {
+        # fast cut: the start can only be on a keyframe, so Q/W move it to the previous / next one
+        $k = if ($d -lt 0) { if ($st.Start -gt 0.01) { Get-KeyframeBefore $st.Video ($st.Start - 0.01) } else { $null } } else { Get-KeyframeAfter $st.Video $st.Start ($st.End - 0.1) }
+        if ($null -eq $k) { [System.Media.SystemSounds]::Beep.Play() } else { $st.Start = $k }
+        Seek-To $st.Start
+    } elseif ($which -eq 'start') {
         $st.Start = [math]::Max(0.0, [math]::Min($st.Start + $d, $st.End - 0.1))
         Seek-To $st.Start
     } else {
@@ -305,8 +316,8 @@ function Start-Next-Job {
     if ($st.Running -or $st.Jobs.Count -eq 0) { return }
     $job = $st.Jobs[0]; $st.Jobs.RemoveAt(0)
     # OBS open (e.g. recording this window)? Share the GPU encoder: lighter preset, paced, low priority.
-    $gentle = ($job.Kind -eq 'mp4') -and (Test-ObsRunning)
-    $argv = if ($job.Kind -eq 'mp4') { Get-CutArgs $job.Video $job.Start $job.Len $job.Mp4 $st.Enc -Gentle:$gentle } else { Get-Mp3Args $job.Video $job.Start $job.Len $job.Mp3 }
+    $gentle = ($job.Kind -eq 'mp4') -and -not $job.Copy -and (Test-ObsRunning)
+    $argv = if ($job.Kind -eq 'mp4' -and $job.Copy) { Get-CopyCutArgs $job.Video $job.Start $job.Len $job.Mp4 } elseif ($job.Kind -eq 'mp4') { Get-CutArgs $job.Video $job.Start $job.Len $job.Mp4 $st.Enc -Gentle:$gentle } else { Get-Mp3Args $job.Video $job.Start $job.Len $job.Mp3 }
     $psi = New-Object Diagnostics.ProcessStartInfo
     $psi.FileName = $ffmpeg
     $psi.Arguments = ($argv | ForEach-Object { Quote-Arg $_ }) -join ' '
@@ -322,7 +333,9 @@ function Check-Jobs {
     if (-not $job -or -not $job.Proc.HasExited) { return }
     $code = $job.Proc.ExitCode
     $st.Running = $null
-    if ($job.Kind -eq 'mp4' -and $code -ne 0 -and $st.Enc -ne 'libx264') {
+    if ($job.Kind -eq 'mp4' -and $code -ne 0 -and $job.Copy) {
+        $job.Copy = $false; $job.Label += ' (fast cut failed, re-encoding)'; $st.Jobs.Insert(0, $job)   # copying failed: encode it the normal way
+    } elseif ($job.Kind -eq 'mp4' -and $code -ne 0 -and $st.Enc -ne 'libx264') {
         $st.Enc = 'libx264'; Reset-Encoder; Set-Title; $st.Jobs.Insert(0, $job)   # GPU encoder failed: retry on the CPU (re-detect next start)
     } elseif ($job.Kind -eq 'mp4') {
         $size = 0; try { $size = (Get-Item -LiteralPath $job.Mp4).Length } catch {}
@@ -351,13 +364,15 @@ function Cut-Slice {
         if ($a -ge $st.Dur) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'Start is past the end of the video'; return }
         $b = [math]::Min($b, $st.Dur)
     }
+    $fast = Fast
+    if ($fast) { $a = Snap-Start $a }                            # fast cut starts on a keyframe
     if ($b -le $a) { [System.Media.SystemSounds]::Beep.Play(); $ui.MarkText.Text = 'End must be after start'; return }
     $paths = Get-SlicePaths $st.Video $a $b
     New-Item -ItemType File -Path $paths.Mp4 -Force | Out-Null   # reserve the name so quick cuts never collide
-    $label = '{0,2}. {1} -> {2}' -f ($ui.Slices.Items.Count + 1), (Short $a), (Short $b)
+    $label = '{0,2}. {1} -> {2}{3}' -f ($ui.Slices.Items.Count + 1), (Short $a), (Short $b), $(if ($fast) { ' fast' } else { '' })
     $row = $ui.Slices.Items.Add("$label  queued")
     $ui.Slices.ScrollIntoView($ui.Slices.Items[$row])
-    $base = @{ Video = $st.Video; Start = $a; Len = ($b - $a); Mp4 = $paths.Mp4; Mp3 = $paths.Mp3; Row = $row; Label = $label; Proc = $null }
+    $base = @{ Video = $st.Video; Start = $a; Len = ($b - $a); Mp4 = $paths.Mp4; Mp3 = $paths.Mp3; Row = $row; Label = $label; Proc = $null; Copy = $fast }
     $j1 = $base.Clone(); $j1.Kind = 'mp4'; [void]$st.Jobs.Add($j1)
     if ($ui.ChkMp3.IsChecked) { $j2 = $base.Clone(); $j2.Kind = 'mp3'; [void]$st.Jobs.Add($j2) }
     $st.Start = $null; $st.End = $null
@@ -523,7 +538,7 @@ function Kill-Key([int]$dir) {
     }
     $t = $k[$i]
     $last = if ($st.KillLasts -and $i -lt @($st.KillLasts).Count) { [math]::Max($t, $st.KillLasts[$i]) } else { $t }   # KILL x2 ...: up to the last kill
-    $a = [math]::Max(0.0, $t - $KillBefore); $b = $last + $KillAfter
+    $a = Snap-Start ([math]::Max(0.0, $t - $KillBefore)); $b = $last + $KillAfter
     if ($st.Dur -gt 0) { $b = [math]::Min($b, $st.Dur) }
     $st.Start = $a; $st.End = $b; $st.KillIx = $i; $st.KillClip = @($a, $b)
     Start-Loop
@@ -630,6 +645,12 @@ $ui.BtnEnd.Add_Click({ Mark-End })
 $ui.BtnClear.Add_Click({ Clear-Marks })
 $ui.BtnCut.Add_Click({ Cut-Slice })
 $ui.BtnJoin.Add_Click({ Join-Slices })
+$ui.ChkFast.IsChecked = [bool](Get-Settings).FastCut
+$ui.ChkFast.Add_Click({
+    Set-Setting 'FastCut' (Fast)
+    if ((Fast) -and $null -ne $st.Start) { $st.Start = Snap-Start $st.Start; if (Looping) { Start-Loop } }
+    Update-Marks
+})
 $ui.BtnKills.Add_Click({ Kill-Key 1 })
 $ui.BtnNext.Add_Click({ Next-Video })
 $ui.BtnPrev.Add_Click({ Prev-Video })
@@ -742,6 +763,33 @@ if ($SelfTest) {
     $win.Add_ContentRendered({ $tt.Start() })
 }
 
+if ($FastTest) {
+    # automated check of fast cut: start snaps to a keyframe, Q/W step by keyframes, the clip is copied; prints results, then closes
+    $script:fstep = 0; $script:flog = New-Object System.Collections.ArrayList
+    $ft = New-Object Windows.Threading.DispatcherTimer
+    $ft.Interval = [TimeSpan]::FromMilliseconds(250)
+    $ft.Add_Tick({
+        $script:fstep++; $k = $script:fstep
+        function L($m) { [void]$script:flog.Add($m) }
+        switch ($k) {
+            6  { $ui.ChkFast.IsChecked = $true; Seek-To 2.4; L "  >> fast on, seek 2.4" }
+            9  { Mark-Start; Seek-To 5.3 }
+            11 { Mark-End; L ("  >> marked: {0:N3}-{1:N3}  text: {2}" -f $st.Start, $st.End, $ui.MarkText.Text) }
+            14 { Nudge 'start' 0.2; L ("  >> W: start {0:N3}" -f $st.Start) }
+            16 { Nudge 'start' (-0.2); L ("  >> Q: start {0:N3}" -f $st.Start) }
+            18 { Nudge 'start' (-0.2); L ("  >> Q: start {0:N3}" -f $st.Start) }
+            20 { Nudge 'start' 0.2; Nudge 'start' 0.2; Nudge 'start' 0.2; L ("  >> W x3: start {0:N3} (end {1:N3})" -f $st.Start, $st.End) }
+            22 { Nudge 'start' (-0.2); Nudge 'start' (-0.2); Cut-Slice; L "  >> cut" }
+        }
+        if ($k -gt 24 -and -not $st.Running -and $st.Jobs.Count -eq 0) {
+            Write-Host ("FASTTEST`n  " + ($script:flog -join "`n  ") + "`n  slices: " + ($ui.Slices.Items -join ' || ') + "`n  files: " + ($st.Done -join ' | '))
+            $ft.Stop(); $win.Close()
+        }
+        if ($k -gt 160) { Write-Host 'FASTTEST timeout'; $ft.Stop(); $win.Close() }
+    })
+    $win.Add_ContentRendered({ $ft.Start() })
+}
+
 if ($KillTest) {
     # automated check of Find kills: K (scan), then K, K, Shift+K; prints what happened, then closes
     $script:kstep = 0; $script:klog = New-Object System.Collections.ArrayList; $script:kphase = 0
@@ -796,4 +844,4 @@ $win.Add_Loaded({ Start-Mpv; Set-Title; Load-Video 0; $timer.Start() })
 
 # remove placeholders of slices that never finished
 foreach ($j in @($st.Jobs) + @($st.Running)) { if ($j -and $j.Kind -eq 'mp4') { try { $f = Get-Item -LiteralPath $j.Mp4 -EA Stop; if ($f.Length -eq 0) { Remove-Item -LiteralPath $j.Mp4 } } catch {} } }
-if ($st.Done.Count -and -not $SelfTest) { Show-InFolder $st.Done[$st.Done.Count - 1] }
+if ($st.Done.Count -and -not $SelfTest -and -not $FastTest) { Show-InFolder $st.Done[$st.Done.Count - 1] }

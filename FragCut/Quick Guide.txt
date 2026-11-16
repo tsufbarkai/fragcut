@@ -44,6 +44,10 @@ Slices save in the background (next to the recording) while you keep watching.
   Click anywhere on the timeline to jump there, or drag it (pauses + mutes while dragging).
   Opened several recordings? They're listed on the right - click one to switch.
   "Also save MP3" = also save the sound of each slice as an MP3.
+  "Fast cut (no re-encode)" = copy the slice out of the recording instead of encoding it: saved instantly,
+     original quality and size. It can only start on a keyframe, so the start moves back to the last one
+     before your mark (usually 0.5-2 s), and Q / W move the start by one keyframe. The clip keeps the
+     recording's format (AV1 / HEVC clips don't play everywhere).
   The orange bar above the timeline shows the marked part.
   Slices are named like:  <recording> - clip 01m38-01m43.mp4
 

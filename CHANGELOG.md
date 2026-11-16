@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.0
+
+- **Fast cut (no re-encode)**: a checkbox in FragCut. When it's on, clips are copied from the recording instead of
+  encoded: saving takes well under a second, the quality is the original's, and the size per second is the recording's.
+  A copied clip can only start on a keyframe, so the start mark moves back to the keyframe at or before it
+  (recordings usually have one every 0.5 to 2 seconds) and `Q` / `W` move the start to the previous / next keyframe.
+  The end can be anywhere. The clip keeps the recording's format, so an AV1 or HEVC recording gives an AV1 or HEVC clip,
+  which some apps and Windows' own player can't play. Copied clips from the same recording settings join without
+  re-encoding. The setting is remembered.
+
 ## 1.5.1
 
 - **Clips are no longer much bigger than the recording**: a clip's bitrate is now limited by the recording's:
