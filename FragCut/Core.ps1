@@ -1,7 +1,7 @@
 ﻿# FragCut - shared helpers (dot-sourced by FragCut.ps1, Join.ps1, TimeCut.ps1, Compress.ps1 and KillScan.ps1).
 # https://github.com/tsufbarkai/fragcut
 
-$FragCutVersion = '1.5.0'
+$FragCutVersion = '1.5.1'
 $script:Inv = [Globalization.CultureInfo]::InvariantCulture
 $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'FragCut\settings.json'
 
@@ -79,29 +79,72 @@ function Save-LastFolder($file) { try { Set-Setting 'LastFolder' (Split-Path $fi
 
 # ---------- encoding ----------
 # Pick the fastest working H.264 encoder once (NVIDIA > AMD > Intel > CPU) and remember it.
+# Each one is tried with the exact settings clips use (mode 0). If a driver rejects those, a plain capped-bitrate
+# version is tried (mode 1) before moving on to the next encoder.
 function Get-Encoder($ffmpeg) {
     $s = Get-Settings
     if ($s.Encoder -and $s.EncoderVersion -eq $FragCutVersion) { return $s.Encoder }
-    $pick = 'libx264'
-    foreach ($e in 'h264_nvenc', 'h264_amf', 'h264_qsv') {
-        & $ffmpeg -hide_banner -loglevel quiet -f lavfi -i 'color=c=black:s=1280x720:r=30' -frames:v 5 -c:v $e -f null - 2>$null
-        if ($LASTEXITCODE -eq 0) { $pick = $e; break }
+    $pick = 'libx264'; $mode = 0
+    :found foreach ($e in 'h264_nvenc', 'h264_amf', 'h264_qsv') {
+        foreach ($m in 0, 1) {
+            $a = @('-hide_banner','-loglevel','quiet','-f','lavfi','-i','testsrc2=s=1280x720:r=60','-frames:v','10') + (Get-VideoEncArgs $e -Cap 20e6 -Mode $m) + @('-pix_fmt','yuv420p','-f','null','-')
+            & $ffmpeg @a 2>$null
+            if ($LASTEXITCODE -eq 0) { $pick = $e; $mode = $m; break found }
+        }
     }
     Set-Setting 'Encoder' $pick
+    Set-Setting 'EncoderMode' $mode
     Set-Setting 'EncoderVersion' $FragCutVersion
     return $pick
 }
 function Reset-Encoder { Set-Setting 'Encoder' $null }
+function Get-EncoderMode { $m = (Get-Settings).EncoderMode; if ($null -eq $m) { return 0 }; return [int]$m }
 
-# High-quality settings per encoder. All slices from one PC use the same encoder,
-# so Join can stitch them without re-encoding.
-function Get-VideoEncArgs([string]$enc, [switch]$Gentle) {
+# Settings per encoder: quality-based where the encoder has it, never above $Cap bits/s (see Get-SourceCap).
+# The H.264 level is fixed (5.2: up to 4K60), so clips with different caps still join without re-encoding.
+function Get-VideoEncArgs([string]$enc, [switch]$Gentle, [double]$Cap = 40e6, [int]$Mode = -1) {
+    if ($Mode -lt 0) { $Mode = Get-EncoderMode }
+    $max = '{0}k' -f [int]($Cap / 1000); $avg = '{0}k' -f [int]($Cap * 0.75 / 1000); $buf = '{0}k' -f [int]($Cap * 2 / 1000)
     switch ($enc) {
-        'h264_nvenc' { return @('-c:v','h264_nvenc','-preset',$(if ($Gentle) { 'p4' } else { 'p7' }),'-tune','hq','-rc','vbr','-cq','19','-b:v','28M','-maxrate','40M','-bufsize','56M') }
-        'h264_amf'   { return @('-c:v','h264_amf','-quality','quality','-rc','cqp','-qp_i','18','-qp_p','20','-qp_b','22') }
-        'h264_qsv'   { return @('-c:v','h264_qsv','-preset','slower','-global_quality','20') }
-        default      { return @('-c:v','libx264','-preset','medium','-crf','18') }
+        'h264_nvenc' {
+            if ($Mode -eq 1) { return @('-c:v','h264_nvenc','-b:v',$avg,'-maxrate',$max,'-bufsize',$buf) }
+            return @('-c:v','h264_nvenc','-preset',$(if ($Gentle) { 'p4' } else { 'p7' }),'-tune','hq','-rc','vbr','-cq','19','-b:v',$avg,'-maxrate',$max,'-bufsize',$buf,'-profile:v','high','-level','5.2')
+        }
+        'h264_amf' {
+            if ($Mode -eq 1) { return @('-c:v','h264_amf','-b:v',$avg,'-maxrate',$max) }
+            return @('-c:v','h264_amf','-quality','quality','-rc','vbr_peak','-b:v',$avg,'-maxrate',$max,'-bufsize',$buf,'-profile:v','high','-level','5.2')
+        }
+        'h264_qsv' {
+            if ($Mode -eq 1) { return @('-c:v','h264_qsv','-b:v',$avg,'-maxrate',$max) }
+            return @('-c:v','h264_qsv','-preset','slower','-b:v',$avg,'-maxrate',$max,'-bufsize',$buf,'-profile:v','high','-level','52')
+        }
+        default { return @('-c:v','libx264','-preset','medium','-crf','18','-maxrate',$max,'-bufsize',$max,'-profile:v','high','-level','5.2') }   # 1 s buffer: short clips stay under the cap too
     }
+}
+
+# How many bits/s a clip of this recording may use: up to 1.5x the recording's video bitrate for AV1/HEVC/VP9
+# (H.264 needs more bits for the same picture) and 1.2x for H.264, always between 6 and 40 Mbit/s. Cached per file.
+# Measured on a 1440p60 AV1 recording (22 Mbit/s) cut with NVENC: VMAF 95.1 at 1x, 97.9 at 1.5x, 98.8 at 1.8x.
+$script:CapCache = @{}
+function Get-SourceCap($video) {
+    if ($script:CapCache.ContainsKey($video)) { return $script:CapCache[$video] }
+    $cap = 40e6
+    try {
+        if (-not $script:Ffprobe) { $script:Ffprobe = Find-Tool 'ffprobe' }
+        $v = (& $script:Ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,bit_rate -of csv=p=0 "$video" | Select-Object -First 1).Split(',')
+        $codec = $v[0].Trim(); $br = 0.0
+        if ($v.Count -gt 1 -and $v[1] -match '^\d+$') { $br = [double]$v[1] }
+        if ($br -le 0) {                                                # MKV etc. don't store it per stream
+            $fmt = (& $script:Ffprobe -v error -show_entries format=bit_rate -of csv=p=0 "$video" | Select-Object -First 1)
+            if ("$fmt".Trim() -match '^\d+$') { $br = [double]$fmt - 200e3 }
+        }
+        if ($br -gt 0) {
+            $factor = switch ($codec) { 'h264' { 1.2 } { $_ -in 'hevc','av1','vp9' } { 1.5 } default { 1.0 } }
+            $cap = [math]::Max(6e6, [math]::Min(40e6, $br * $factor))
+        }
+    } catch {}
+    $script:CapCache[$video] = $cap
+    return $cap
 }
 
 # Smaller-file settings for Compress (H.264 so it plays everywhere). Tested on a 1440p60 BF6 montage
@@ -134,10 +177,12 @@ function Test-ObsRunning { return [bool](Get-Process -Name 'obs64','obs32','obs'
 
 # -Gentle: lighter preset (NVIDIA p4: ~same size/quality, ~2x less encoder time) and paced to 1.5x real time,
 # which leaves room on the video encoder for OBS. Slices still join losslessly with normal ones.
-function Get-CutArgs($video, [double]$start, [double]$len, $mp4, [string]$enc, [switch]$Gentle) {
+# -Cap: bits/s limit for the clip; 0 = from the recording (Get-SourceCap)
+function Get-CutArgs($video, [double]$start, [double]$len, $mp4, [string]$enc, [switch]$Gentle, [double]$Cap = 0) {
+    if ($Cap -le 0) { $Cap = Get-SourceCap $video }
     $a = @('-hide_banner','-loglevel','error','-y','-ss',(Fmt $start),'-i',$video,'-t',(Fmt $len))
     if ($Gentle) { $a += @('-vf','realtime=speed=1.5') }
-    $a += Get-VideoEncArgs $enc -Gentle:$Gentle
+    $a += Get-VideoEncArgs $enc -Gentle:$Gentle -Cap $Cap
     $a += @('-pix_fmt','yuv420p','-c:a','aac','-b:a','192k','-ar','48000','-ac','2','-movflags','+faststart',$mp4)
     return $a
 }

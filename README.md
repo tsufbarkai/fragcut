@@ -86,9 +86,12 @@ If you already know the times, choose **Send to → FragCut - Cut by time** and 
 
 ### Making a video smaller
 
-Select one or more videos and choose **Send to → FragCut - Compress**. It saves a copy named `<name> - compressed.mp4`, usually about half the size, and leaves the original as it is. The quality drop is small. In a test on a 1440p game montage it was hard to notice while watching.
+Select one or more videos and choose **Send to → FragCut - Compress**. It saves a copy named `<name> - compressed.mp4`, usually about half the size, and leaves the original as it is. The quality drop is small. In a test on a 1440p game montage it was hard to notice while watching. AV1, HEVC and VP9 videos are skipped, because they're already more compact than the H.264 copy Compress makes.
 
 ## Questions
+
+**Why is a clip bigger per second than my recording?**
+FragCut saves clips as H.264, which plays everywhere and lets clips join without re-encoding. If you record in AV1 or HEVC, H.264 needs more data for the same picture, so a clip may use up to 1.5 times the recording's bitrate (1.2 times for H.264 recordings, never more than 40 Mbit/s). In a test on a 1440p60 AV1 recording, clips at that limit scored 97.9 out of 100 (VMAF) against the original.
 
 **Which player does FragCut use?**
 mpv, if it's installed (the window title says "player: mpv"). It plays H.264, HEVC, AV1 and VP9 recordings and decodes them on the graphics card. Without mpv, FragCut uses the player built into Windows.
@@ -115,7 +118,7 @@ Run `Uninstall.bat` (it's in the zip and in `%LOCALAPPDATA%\FragCut`). Your clip
 
 FragCut is a few PowerShell scripts. The player window uses WPF. The video in it is mpv, started inside the window and controlled through mpv's JSON pipe, or Windows' built-in video playback when mpv isn't installed. ffmpeg does the cutting, joining and compressing.
 
-Every clip is encoded with the same settings (H.264 video, AAC 48 kHz stereo audio). That's why clips can be joined without re-encoding.
+Every clip is encoded with the same settings (H.264 High profile level 5.2, AAC 48 kHz stereo audio). That's why clips can be joined without re-encoding. Only the bitrate limit differs, depending on the recording.
 
 | File | What it does |
 |---|---|

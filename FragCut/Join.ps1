@@ -20,7 +20,7 @@ $ErrorActionPreference = 'Stop'
 function Done { if (-not $NoPause) { Read-Host "`nPress Enter to close" | Out-Null } }
 
 function Probe($ffprobe, $file) {
-    $j = (& $ffprobe -v error -show_entries 'stream=codec_type,codec_name,profile,width,height,r_frame_rate,pix_fmt,sample_rate,channels:format=duration' -of json "$file") -join "`n" | ConvertFrom-Json
+    $j = (& $ffprobe -v error -show_entries 'stream=codec_type,codec_name,profile,level,width,height,r_frame_rate,pix_fmt,sample_rate,channels:format=duration' -of json "$file") -join "`n" | ConvertFrom-Json
     $v = $j.streams | Where-Object codec_type -eq 'video' | Select-Object -First 1
     $a = $j.streams | Where-Object codec_type -eq 'audio' | Select-Object -First 1
     if (-not $v) { throw "no video stream in $(Split-Path $file -Leaf)" }
@@ -33,7 +33,7 @@ function Probe($ffprobe, $file) {
         Height   = [int]$v.height
         Fps      = $fps
         HasAudio = [bool]$a
-        Key      = "$($v.codec_name)|$($v.profile)|$($v.width)x$($v.height)|$($v.r_frame_rate)|$($v.pix_fmt)|$($a.codec_name)|$($a.sample_rate)|$($a.channels)"
+        Key      = "$($v.codec_name)|$($v.profile)|$($v.level)|$($v.width)x$($v.height)|$($v.r_frame_rate)|$($v.pix_fmt)|$($a.codec_name)|$($a.sample_rate)|$($a.channels)"
     }
 }
 

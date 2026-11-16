@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.5.1
+
+- **Clips are no longer much bigger than the recording**: a clip's bitrate is now limited by the recording's:
+  up to 1.5x for AV1, HEVC and VP9 recordings (H.264 needs more bits for the same picture) and 1.2x for H.264
+  recordings, between 6 and 40 Mbit/s. Before, clips used fixed settings, and on AMD graphics cards had no limit
+  at all: a 25 s clip of an AV1 recording could be about as big as the 2-minute recording.
+  On a 1440p60 AV1 recording the clips measure VMAF 97.9 against the original.
+- AMD and Intel encoders use a capped variable bitrate instead of a fixed quantizer.
+- When FragCut picks the encoder, it now tests the exact clip settings, and falls back to simpler capped settings
+  if a driver doesn't accept them.
+- Clips always use H.264 High profile, level 5.2, so clips with different bitrates still join without re-encoding.
+  Join also checks the level, so older clips are re-encoded instead of being joined wrongly.
+- Compress skips AV1, HEVC and VP9 videos: they're already more compact than the H.264 copy it would make.
+
 ## 1.5.0
 
 - **mpv as the player**: if [mpv](https://mpv.io) is installed, FragCut plays recordings with it, inside its window.

@@ -96,13 +96,15 @@ try {
     $tmp = Join-Path $env:TEMP "fragcut-killmontage-$PID"
     New-Item -ItemType Directory -Force $tmp | Out-Null
     $clips = @()
+    # one bitrate limit for all clips (the highest the recordings allow), so the montage looks even throughout
+    $cap = (@($parts | ForEach-Object { $_.Video } | Select-Object -Unique | ForEach-Object { Get-SourceCap $_ }) | Measure-Object -Maximum).Maximum
     $sw = [Diagnostics.Stopwatch]::StartNew()
     for ($i = 0; $i -lt $parts.Count; $i++) {
         $p = $parts[$i]
         $mp4 = Join-Path $tmp ('{0:000}.mp4' -f $i)
         Write-Host -NoNewline ("`r  clip {0}/{1}" -f ($i + 1), $parts.Count)
         foreach ($e in @($enc, 'libx264') | Select-Object -Unique) {
-            $a = Get-CutArgs $p.Video $p.Start ($p.End - $p.Start) $mp4 $e -Gentle:$gentle
+            $a = Get-CutArgs $p.Video $p.Start ($p.End - $p.Start) $mp4 $e -Gentle:$gentle -Cap $cap
             if ($mixed) {
                 $scale = "scale=${W}:${H}:force_original_aspect_ratio=decrease:flags=lanczos,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,setsar=1"
                 $ix = [array]::IndexOf($a, '-vf')

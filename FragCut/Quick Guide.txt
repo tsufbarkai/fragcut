@@ -81,7 +81,8 @@ COMPRESS - smaller file to share
 Select one or more videos > right-click > Send to > FragCut - Compress.
 - Makes a copy about half the size that looks nearly the same (H.264, plays everywhere).
 - Saved as:  <name> - compressed.mp4   next to the original. The original is not changed.
-- Game recordings and montages shrink the most. Already-small videos are skipped.
+- Game recordings and montages shrink the most. Already-small videos are skipped, and so are AV1/HEVC/VP9
+  videos (already more compact than the H.264 copy).
 
 
 GOOD TO KNOW

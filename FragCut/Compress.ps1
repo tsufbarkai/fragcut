@@ -62,8 +62,14 @@ try {
         $before = (Get-Item -LiteralPath $video).Length
         $acodec = (& $ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of csv=p=0 "$video" | Select-Object -First 1)
         $audioCopy = ("$acodec".Trim() -eq 'aac')
+        $vcodec = "$(& $ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of csv=p=0 "$video" | Select-Object -First 1)".Trim()
         Write-Host ""
         Write-Host ("{0}  ({1:N1} MB)" -f (Split-Path $video -Leaf), ($before / 1MB)) -ForegroundColor Cyan
+        # AV1 / HEVC / VP9 are about twice as efficient as H.264: an H.264 copy would be bigger or look clearly worse
+        if ($vcodec -in 'av1', 'hevc', 'vp9') {
+            Write-Host "  this video is $($vcodec.ToUpper()), which is already more compact than the H.264 FragCut makes - skipped." -ForegroundColor Yellow
+            continue
+        }
 
         $sw = [Diagnostics.Stopwatch]::StartNew()
         $ok = Run-Compress $ffmpeg $video $out $enc $audioCopy
