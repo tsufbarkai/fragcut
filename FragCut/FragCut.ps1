@@ -13,7 +13,7 @@
 # so Join stitches them without re-encoding.
 
 [CmdletBinding(PositionalBinding = $false)]   # file names always go into $Files
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest, [switch]$RoundTest, [switch]$GripTest, [switch]$LibTest, [string]$ShotTest)
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest, [switch]$RoundTest, [switch]$GripTest, [switch]$LibTest, [string]$ShotTest, [string]$Shots)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
@@ -1453,6 +1453,85 @@ if ($ShotTest) {
     $win.Add_ContentRendered({ $win.Activate(); $win.Topmost = $true; $sh.Start() })
 }
 
+if ($Shots) {
+    # README screenshots: run on a demo folder (passed as the file argument); saves numbered PNGs into the $Shots folder
+    $script:shk = 0; $script:shWait = $null
+    function Grab($w) {
+        Add-Type -AssemblyName System.Drawing
+        if (-not ('ShotWin' -as [type])) { Add-Type -Name ShotWin -Namespace '' -MemberDefinition @'
+[DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr h, int a, int[] r, int s);
+[DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, int[] r);
+[DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
+'@ }
+        # PrintWindow draws the window itself, even if another window is on top of it
+        $hwnd = (New-Object Windows.Interop.WindowInteropHelper $w).Handle
+        $wr = New-Object int[] 4; [void][ShotWin]::GetWindowRect($hwnd, $wr)
+        $fr = New-Object int[] 4; [void][ShotWin]::DwmGetWindowAttribute($hwnd, 9, $fr, 16)   # the visible frame, without the invisible resize border
+        $full = New-Object Drawing.Bitmap ($wr[2] - $wr[0]), ($wr[3] - $wr[1])
+        $g = [Drawing.Graphics]::FromImage($full); $dc = $g.GetHdc(); [void][ShotWin]::PrintWindow($hwnd, $dc, 2); $g.ReleaseHdc($dc); $g.Dispose()
+        $bmp = $full.Clone((New-Object Drawing.Rectangle ($fr[0] - $wr[0]), ($fr[1] - $wr[1]), ($fr[2] - $fr[0]), ($fr[3] - $fr[1])), $full.PixelFormat); $full.Dispose()
+        return @{ Bmp = $bmp; X = $fr[0]; Y = $fr[1] }
+    }
+    function Shot([string]$name, $over) {
+        $m = Grab $win; $bmp = $m.Bmp
+        if ($over) { $o = Grab $over; $g = [Drawing.Graphics]::FromImage($bmp); $g.DrawImage($o.Bmp, $o.X - $m.X, $o.Y - $m.Y, $o.Bmp.Width, $o.Bmp.Height); $g.Dispose(); $o.Bmp.Dispose() }
+        $out = Join-Path $Shots "$name.png"; $bmp.Save($out, [Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+        Write-Host "SHOT $out"
+    }
+    function Mark([double]$a, [double]$b) { $st.Start = $a; $st.End = $b; Start-Loop }
+    function Only-New { foreach ($n in $st.Lib) { if ($n.Kind -eq 'round') { $st.Expanded[$n.Path] = $n.Name -like 'BF6-14 *' } }; Render-Library }
+    $sx = New-Object Windows.Threading.DispatcherTimer
+    $sx.Interval = [TimeSpan]::FromMilliseconds(250)
+    $sx.Add_Tick({
+        $script:shk++; $k = $script:shk
+        if ($script:shWait) { if (& $script:shWait) { $script:shWait = $null; $script:shk = 1000 * ([math]::Floor($k / 1000) + 1) - 1 } else { return } }
+        switch ($k) {
+            # 1: the Library - a round open with its clips, three recordings not in a round yet
+            4 {
+                $ui.ChkClips.IsChecked = $true
+                $r = @($st.Lib | Where-Object { $_.Kind -eq 'round' -and $_.Name -like 'BF6-9 *' })[0]
+                $rec = @($r.Children | Where-Object { $_.Kind -eq 'rec' })[0]
+                Load-Path $rec.Path -Paused
+            }
+            10 { Seek-To 36.0 }
+            16 { Shot '1-library' }
+            # 2: select the loose recordings, Make round
+            18 {
+                foreach ($n in $st.Lib) { if ($n.Kind -eq 'round') { $st.Expanded[$n.Path] = $false } }
+                Render-Library
+                $st.SyncingList = $true; $ui.Videos.SelectedItems.Clear()
+                foreach ($it in $ui.Videos.Items) { if ($it.Tag -is [hashtable] -and $it.Tag.Kind -eq 'rec' -and -not $it.Tag.Round) { [void]$ui.Videos.SelectedItems.Add($it) } }
+                $st.SyncingList = $false
+                Later { Make-Round }
+            }
+            26 { Shot '2-make-round' $script:RD.Win; $script:RD.Win.DialogResult = $true }
+            # 3: the new round's first recording, a part marked and looping
+            32 {
+                $r = @($st.Lib | Where-Object { $_.Kind -eq 'round' -and $_.Name -like 'BF6-14 *' })[0]
+                $rec = @($r.Children | Where-Object { $_.Kind -eq 'rec' })[0]
+                Load-Path $rec.Path -Paused
+            }
+            40 { Only-New; Mark 99.0 104.5 }
+            48 { Cut-Slice; $script:shWait = { -not $st.Jobs.Count } }
+            1000 { Only-New; Mark 105.6 110.2 }
+            1012 { Shot '3-marked' }
+            1013 { Cut-Slice }
+            1016 { Shot '4-cut-keeps-playing'; $script:shWait = { -not $st.Jobs.Count } }
+            2000 { Mark 112.0 117.5 }
+            2006 { Cut-Slice; $script:shWait = { -not $st.Jobs.Count } }
+            # 5: the clip list, ready to join
+            3000 { Only-New; Pause-Video; Seek-To 110.9; $ui.Slices.SelectedIndex = 1 }
+            3008 { Shot '5-clip-list' }
+            3010 { Join-Slices; $script:shWait = { -not $st.Join } }
+            4002 { Only-New }
+            4006 { Shot '6-joined' }
+            4008 { $sx.Stop(); $win.Close() }
+        }
+        if ($k -gt 900 -and $k -lt 1000 -or $k -gt 9000) { Write-Host 'SHOTS timeout'; $sx.Stop(); $win.Close() }
+    })
+    $win.Add_ContentRendered({ $win.Activate(); $win.Topmost = $true; $sx.Start() })
+}
+
 if ($FastTest) {
     # automated check of fast cut: start snaps to a keyframe, Q/W step by keyframes, the clip is copied; prints results, then closes
     $script:fstep = 0; $script:flog = New-Object System.Collections.ArrayList
@@ -1543,4 +1622,4 @@ $win.Add_Loaded({
 # remove placeholders of slices that never finished
 foreach ($j in @($st.Jobs) + @($st.Running)) { if ($j -and $j.Kind -eq 'mp4') { try { $f = Get-Item -LiteralPath $j.Mp4 -EA Stop; if ($f.Length -eq 0) { Remove-Item -LiteralPath $j.Mp4 } } catch {} } }
 $saved = @($st.Clips | Where-Object { $_.Saved } | ForEach-Object { $_.Mp4 })
-if ($saved.Count -and -not $SelfTest -and -not $FastTest -and -not $RoundTest -and -not $GripTest -and -not $LibTest -and -not $ShotTest) { Show-InFolder $saved[$saved.Count - 1] }
+if ($saved.Count -and -not $SelfTest -and -not $FastTest -and -not $RoundTest -and -not $GripTest -and -not $LibTest -and -not $ShotTest -and -not $Shots) { Show-InFolder $saved[$saved.Count - 1] }

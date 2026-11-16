@@ -2,9 +2,9 @@
 
 FragCut is a small Windows tool for cutting clips out of game recordings and joining them into one video.
 
-You open a recording from the right-click menu, watch it, mark where a clip starts and ends, and press Enter to save it. When you have a few clips, press J to join them.
+You pick the folder your recordings are saved in, watch a recording, mark where a clip starts and ends, and press Enter to save it. When you have a few clips, press J to join them. Recordings of one game round can be put together in a folder of their own.
 
-![FragCut: marking a part of a recording, adjusting it while it loops, and cutting it](docs/demo.gif)
+![FragCut with a Battlefield 6 recording playing. The folder bar is at the top, and the Library on the right lists rounds, recordings and clips. Three recordings that aren't in a round yet are yellow.](docs/library.png)
 
 It works with any MP4 or MKV recording (NVIDIA App / ShadowPlay, Xbox Game Bar, AMD ReLive, OBS, Steam). It uses [ffmpeg](https://ffmpeg.org) to do the actual cutting, and encodes on your graphics card if it can. To play the recordings it uses [mpv](https://mpv.io), if it's installed.
 
@@ -33,6 +33,10 @@ To save a clip:
 2. Press `O` where it should end. That part now plays on repeat, so you can check it.
 3. If it's not quite right, move the start with `Q` / `W` and the end with `E` / `R`, or drag the ends of the orange bar above the timeline.
 4. Press `Enter` to save it. The video keeps playing, and the clip is saved in the background.
+
+![A part of the recording is marked: the orange bar above the timeline shows it, and the line under the video says LOOP 1:45.6 -> 1:50.2](docs/marked.png)
+
+![After Enter the video keeps playing. The clip list shows the first clip saved and the second one saving.](docs/cut.png)
 
 Clips are saved in a `clips` folder next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also MP3** if you also want the audio as a separate file.
 
@@ -80,6 +84,8 @@ Ctrl+click or Shift+click selects several.
 
 To keep the recordings of one game round together, select them in the list (Ctrl+click or Shift+click) and click **Make round...**. FragCut asks for a short game tag, like `BF6`, and suggests the next round number. It shows the new names before anything is moved. Then it:
 
+![The Make round window with tag BF6 and round 14, listing the new and old name of each recording](docs/make-round.png)
+
 - makes a folder for the round next to the recordings, named `BF6-12 2026-11-13` (tag, round number, date of the first recording),
 - moves the recordings into it, renamed `BF6-12-1 <original name>`, `BF6-12-2 <original name>` ... in the order they were recorded,
 - moves the clips already cut from them into the round's `clips` folder, renamed `BF6-12-1 clip 01m38-01m43.mp4`.
@@ -116,13 +122,17 @@ Kills close together share one clip, so a double kill isn't repeated or cut shor
 
 ### Joining clips
 
-Clips you cut are added to the clip list at the bottom of the window. You can also add older clips: right-click them in the recordings list and choose **Add to clip list**. In the clip list:
+Clips you cut are added to the clip list at the bottom of the window. You can also add older clips: right-click them in the Library and choose **Add to clip list**. In the clip list:
 
 - **Play** (or double-click) plays a clip,
 - **Up** / **Down** change the order,
 - **Remove** takes a clip off the list and **Clear list** empties it (the files stay).
 
 Press `J` (or **Join N clips**) to join the saved clips, top to bottom. It runs inside FragCut, and the list is emptied when it's done. The result is saved next to the clips as `<first recording> - montage.mp4`, or `BF6-12 montage.mp4` for a round.
+
+![The clip list with three saved clips and the Join 3 clips button](docs/clip-list.png)
+
+![After joining: the clip list is empty, the line under the video says Saved BF6-14 montage.mp4, and the montage is listed under its round](docs/joined.png)
 
 You can also select clips in Explorer and choose **Send to → FragCut - Join clips**. That opens a console window that lists the clips in the order they were recorded. Press Enter to keep that order, or type a different one, like `3 1 2` (leave a number out to skip that clip). The result is saved as `<first recording> - montage.mp4`.
 
