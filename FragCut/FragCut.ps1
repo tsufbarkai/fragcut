@@ -12,12 +12,13 @@
 # Slices are saved next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
 
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest)
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest, [switch]$RoundTest)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
 . (Join-Path $PSScriptRoot 'Kills.ps1')
 . (Join-Path $PSScriptRoot 'Mpv.ps1')
+. (Join-Path $PSScriptRoot 'Rounds.ps1')
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, WindowsFormsIntegration
 
 function Fail($msg) { [System.Windows.MessageBox]::Show($msg, 'FragCut', 'OK', 'Error') | Out-Null; exit 1 }
@@ -25,8 +26,14 @@ function Fail($msg) { [System.Windows.MessageBox]::Show($msg, 'FragCut', 'OK', '
 try { $ffmpeg = Find-Tool 'ffmpeg'; $ffprobe = Find-Tool 'ffprobe' } catch { Fail $_.Exception.Message }
 
 $queue = New-Object System.Collections.ArrayList
-foreach ($f in $Files) { if ($f -and (Test-Path -LiteralPath $f -PathType Leaf)) { [void]$queue.Add((Resolve-Path -LiteralPath $f).Path) } }
-$queue = [System.Collections.ArrayList]@($queue | Sort-Object { Split-Path $_ -Leaf })
+$folders = New-Object System.Collections.ArrayList
+foreach ($f in $Files) {
+    if (-not $f) { continue }
+    if (Test-Path -LiteralPath $f -PathType Container) { [void]$folders.Add((Resolve-Path -LiteralPath $f).Path) }
+    elseif (Test-Path -LiteralPath $f -PathType Leaf) { [void]$queue.Add((Resolve-Path -LiteralPath $f).Path) }
+}
+$queue = [System.Collections.ArrayList]@($queue | Sort-Object { Get-NaturalKey (Split-Path $_ -Leaf) })
+foreach ($d in $folders) { foreach ($v in (Get-FolderVideos $d)) { [void]$queue.Add($v) } }   # a folder: its recordings, oldest first
 
 function Pick-Videos {
     $dlg = New-Object System.Windows.Forms.OpenFileDialog
@@ -34,7 +41,7 @@ function Pick-Videos {
     $dlg.Filter = 'Videos|*.mp4;*.mkv;*.mov;*.avi;*.webm|All files|*.*'
     $dlg.Multiselect = $true
     $dlg.InitialDirectory = Get-StartFolder
-    if ($dlg.ShowDialog() -eq 'OK') { Save-LastFolder $dlg.FileNames[0]; return @($dlg.FileNames | Sort-Object { Split-Path $_ -Leaf }) }
+    if ($dlg.ShowDialog() -eq 'OK') { Save-LastFolder $dlg.FileNames[0]; return @($dlg.FileNames | Sort-Object { Get-NaturalKey (Split-Path $_ -Leaf) }) }
     return @()
 }
 if ($queue.Count -eq 0 -and $SelfTest) { Write-Host 'SELFTEST no video given'; exit 1 }
@@ -94,14 +101,17 @@ if ($queue.Count -eq 0) { exit }
 
     <DockPanel Grid.Column="2" Grid.Row="0" Grid.RowSpan="7">
       <TextBlock DockPanel.Dock="Top" Text="Recordings" FontSize="15" Foreground="#9aa0ff" Margin="0,0,0,8"/>
-      <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,8,0,0">
+      <WrapPanel DockPanel.Dock="Bottom" Margin="0,8,0,0">
         <Button x:Name="BtnPrev" Content="Prev [P]"/>
         <Button x:Name="BtnNext" Content="Next [N]"/>
-        <Button x:Name="BtnOpen" Content="Add..."/>
-      </StackPanel>
+        <Button x:Name="BtnOpen" Content="Add..." ToolTip="Add recordings to the list"/>
+        <Button x:Name="BtnFolder" Content="Open folder..." ToolTip="Show all recordings in a folder (and its round folders), oldest first"/>
+        <Button x:Name="BtnRound" Content="Make round..." Background="#5f3dc4" ToolTip="Put the selected recordings in a folder of their own, renamed and numbered (e.g. BF6-12-1, BF6-12-2)"/>
+        <Button x:Name="BtnUndo" Content="Undo round" ToolTip="Move the files of the last round back to their old names"/>
+      </WrapPanel>
       <TextBlock DockPanel.Dock="Bottom" TextWrapping="Wrap" Foreground="#8a8a92" FontSize="12" Margin="0,10,0,0"
-                 Text="Marked part loops. Q/W = start earlier/later, E/R = end earlier/later (Shift = 1 s). Enter = cut and keep watching."/>
-      <ListBox x:Name="Videos" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False"/>
+                 Text="Marked part loops. Q/W = start earlier/later, E/R = end earlier/later (Shift = 1 s). Enter = cut and keep watching. Ctrl+click recordings to select several for a round."/>
+      <ListBox x:Name="Videos" Background="#141417" Foreground="#e8e8ea" BorderBrush="#33333a" Focusable="False" SelectionMode="Extended"/>
     </DockPanel>
   </Grid>
 </Window>
@@ -109,7 +119,7 @@ if ($queue.Count -eq 0) { exit }
 
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 $ui = @{}
-foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','ChkFast','Slices','Videos','BtnPrev','BtnNext','BtnOpen') { $ui[$n] = $win.FindName($n) }
+foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','ChkFast','Slices','Videos','BtnPrev','BtnNext','BtnOpen','BtnFolder','BtnRound','BtnUndo') { $ui[$n] = $win.FindName($n) }
 
 $st = @{
     Index = -1; Video = $null; Dur = 0.0; Playing = $false
@@ -126,6 +136,7 @@ $st = @{
     Kills = $null                                      # kill times (s) of the current video, once known
     KillLasts = $null                                  # per kill moment: time of its last kill (KILL x2 ...)
     KillIx = -1; KillClip = $null                      # last kill jumped to, and the part marked for it
+    PendingSeek = $null; PendingPlay = $true           # after files were moved: where to continue
 }
 
 function Set-Status($i, $text) { $ui.Slices.Items[$i] = $text }
@@ -182,7 +193,11 @@ function Check-Mpv {
 function Refresh-Videos {
     $st.SyncingList = $true
     $ui.Videos.Items.Clear()
-    foreach ($v in $queue) { [void]$ui.Videos.Items.Add(([IO.Path]::GetFileNameWithoutExtension($v) -replace '\.DVR$', '')) }
+    foreach ($v in $queue) {
+        $it = New-Object Windows.Controls.ListBoxItem
+        $it.Content = ([IO.Path]::GetFileNameWithoutExtension($v) -replace '\.DVR$', ''); $it.Tag = $v; $it.ToolTip = $v
+        [void]$ui.Videos.Items.Add($it)
+    }
     if ($st.Index -ge 0) { $ui.Videos.SelectedIndex = $st.Index; $ui.Videos.ScrollIntoView($ui.Videos.SelectedItem) }
     $st.SyncingList = $false
 }
@@ -216,6 +231,68 @@ function Load-Video([int]$i) {
     $st.LastSeekAt = [datetime]::MinValue
     Refresh-Videos
     Update-Marks
+}
+
+# ---------- folders and rounds (Rounds.ps1) ----------
+function Open-Folder([string]$dir) {
+    if (-not $dir) {
+        $dlg = New-Object System.Windows.Forms.FolderBrowserDialog
+        $dlg.Description = 'Pick a folder with recordings. FragCut lists them, and the ones in its round folders, oldest first.'
+        if ($st.Video) { $dlg.SelectedPath = Get-GameDir $st.Video } else { $dlg.SelectedPath = Get-StartFolder }
+        if ($dlg.ShowDialog() -ne 'OK') { return }
+        $dir = $dlg.SelectedPath
+    }
+    $vids = @(Get-FolderVideos $dir)
+    if (-not $vids.Count) { [System.Windows.MessageBox]::Show("No recordings in $dir", 'FragCut') | Out-Null; return }
+    $queue.Clear(); foreach ($v in $vids) { [void]$queue.Add($v) }
+    $st.Index = -1
+    Load-Video ($vids.Count - 1)                                   # the newest
+}
+
+function Selected-Videos {
+    $v = @($ui.Videos.SelectedItems | ForEach-Object { $_.Tag })
+    if (-not $v.Count -and $st.Video) { $v = @($st.Video) }
+    return $v
+}
+
+# Runs file moves (a round or its undo): lets go of the open recording first, then updates the list, the cut clips
+# and kill searches to the new names, and reopens the recording where it was.
+function Apply-Moves([scriptblock]$do) {
+    if ($st.Running -or $st.Jobs.Count) { [System.Windows.MessageBox]::Show('Wait until the clips are saved.', 'FragCut') | Out-Null; return }
+    foreach ($k in @($st.Scans.Keys)) { if (-not $st.Scans[$k].Done) { [System.Windows.MessageBox]::Show('Wait until Find kills is done.', 'FragCut') | Out-Null; return } }
+    $pos = Pos; $wasPlaying = $st.Playing
+    Pause-Video
+    Stop-Preview
+    if ($st.Mpv) { $st.Mpv.Stop() } else { $ui.Player.Close() }
+    $done = @()
+    try { $done = @(& $do) } catch { [System.Windows.MessageBox]::Show("Nothing was moved.`n`n$($_.Exception.Message)", 'FragCut', 'OK', 'Warning') | Out-Null }
+    $map = @{}; foreach ($m in $done) { $map[$m.From.ToLowerInvariant()] = $m.To }
+    for ($i = 0; $i -lt $queue.Count; $i++) { $t = $map[$queue[$i].ToLowerInvariant()]; if ($t) { $queue[$i] = $t } }
+    for ($i = 0; $i -lt $st.Done.Count; $i++) { $t = $map[$st.Done[$i].ToLowerInvariant()]; if ($t) { $st.Done[$i] = $t } }
+    $scans = @{}; foreach ($k in @($st.Scans.Keys)) { $t = $map[$k.ToLowerInvariant()]; if ($t) { $scans[$t] = $st.Scans[$k] } else { $scans[$k] = $st.Scans[$k] } }
+    $st.Scans = $scans
+    $st.PendingSeek = $pos; $st.PendingPlay = $wasPlaying
+    Load-Video $st.Index | Out-Null
+    $script:LastMoved = $done
+}
+
+function Make-Round {
+    $vids = @(Selected-Videos)
+    if (-not $vids.Count) { return }
+    $plan = Show-RoundDialog $win $vids
+    if (-not $plan) { return }
+    $script:LastMoved = @(); Apply-Moves { Invoke-RoundPlan $plan } | Out-Null; $done = $script:LastMoved
+    if ($done.Count) { $ui.MarkText.Text = "Round $(Split-Path $plan.Dir -Leaf): $(@($done).Count) files moved" }
+}
+
+function Undo-Round {
+    $e = Get-LastRound
+    if (-not $e) { [System.Windows.MessageBox]::Show('There is no round to undo.', 'FragCut') | Out-Null; return }
+    $n = @($e.Moves).Count
+    $q = "Undo round $($e.Name)?`n`nIts $n files go back to their old names and folders."
+    if ([System.Windows.MessageBox]::Show($q, 'FragCut', 'YesNo', 'Question') -ne 'Yes') { return }
+    $script:LastMoved = @(); Apply-Moves { Undo-LastRound } | Out-Null; $done = $script:LastMoved
+    if ($done.Count) { $ui.MarkText.Text = "Round $($e.Name) undone: $(@($done).Count) files moved back" }
 }
 
 # ---------- playback ----------
@@ -625,6 +702,7 @@ function On-MediaOpened {
     $ui.Seek.Maximum = [math]::Max(0.1, $st.Dur)
     Update-Marks
     Draw-KillTicks
+    if ($null -ne $st.PendingSeek) { $p = $st.PendingSeek; $st.PendingSeek = $null; Seek-To $p; if (-not $st.PendingPlay) { Pause-Video } }
 }
 function On-MediaEnded { if (Looping) { Seek-To $st.Start; Play } else { Pause-Video } }
 $ui.Player.Add_MediaOpened({ On-MediaOpened })
@@ -660,9 +738,13 @@ $ui.BtnOpen.Add_Click({
 })
 $ui.Videos.Add_SelectionChanged({
     if ($st.SyncingList) { return }
+    if ($ui.Videos.SelectedItems.Count -ne 1) { return }          # several selected (Ctrl/Shift+click): for a round, don't switch
     $i = $ui.Videos.SelectedIndex
     if ($i -ge 0 -and $i -ne $st.Index) { Load-Video $i }
 })
+$ui.BtnFolder.Add_Click({ Open-Folder })
+$ui.BtnRound.Add_Click({ Make-Round })
+$ui.BtnUndo.Add_Click({ Undo-Round })
 
 $win.Add_PreviewKeyDown({
     param($s, $e)
@@ -763,6 +845,48 @@ if ($SelfTest) {
     $win.Add_ContentRendered({ $tt.Start() })
 }
 
+if ($RoundTest) {
+    # automated check of rounds: select the first two recordings, make a round (dialog answered by a timer), cut a clip,
+    # then undo the round; prints what happened, then closes. Give it a folder.
+    $script:rstep = 0; $script:rlog = New-Object System.Collections.ArrayList
+    function Show-Tree { $root = Get-GameDir $queue[0]; foreach ($f in (Get-ChildItem -LiteralPath $root -Recurse -File)) { [void]$script:rlog.Add('     ' + $f.FullName.Substring($root.Length + 1)) } }
+    $rt = New-Object Windows.Threading.DispatcherTimer
+    $rt.Interval = [TimeSpan]::FromMilliseconds(250)
+    $rt.Add_Tick({
+        $script:rstep++; $k = $script:rstep
+        function L($m) { [void]$script:rlog.Add($m) }
+        switch ($k) {
+            6  { Load-Video 0; L ("  list: " + (($ui.Videos.Items | ForEach-Object { $_.Content }) -join ' | ')) }
+            10 { Seek-To 3.0 }
+            12 {
+                [void]$ui.Videos.SelectedItems.Add($ui.Videos.Items[1])
+                L ("  selected {0}, playing index {1}" -f $ui.Videos.SelectedItems.Count, $st.Index)
+                $script:dt = New-Object Windows.Threading.DispatcherTimer
+                $script:dt.Interval = [TimeSpan]::FromMilliseconds(600)
+                $script:dt.Add_Tick({
+                    $script:dt.Stop()
+                    $script:RD.Tag.Text = 'TEST'
+                    L ("  dialog: tag TEST, round {0}, ok enabled {1}`n" -f $script:RD.Num.Text, $script:RD.Ok.IsEnabled + $script:RD.Preview.Text)
+                    $script:RD.Win.DialogResult = $true
+                })
+                $script:dt.Start()
+                Make-Round
+                L ("  after round: {0}  now playing [{1}] {2} at {3:N1} s" -f $ui.MarkText.Text, $st.Index, (Split-Path $st.Video -Leaf), (Pos))
+            }
+            20 { L ("  position after reopen: {0:N1} s" -f (Pos)); $st.Start = 4.0; $st.End = 5.0; Cut-Slice }
+            30 { if (-not $st.Running) { L ("  slice: " + ($ui.Slices.Items -join ' || ')); L '  files:'; Show-Tree } else { $script:rstep-- } }
+            32 {
+                $script:mb = $null
+                Apply-Moves { Undo-LastRound } | Out-Null
+                L ("  undo: {0} files moved back, playing {1}" -f @($script:LastMoved).Count, (Split-Path $st.Video -Leaf)); L '  files:'; Show-Tree
+            }
+        }
+        if ($k -gt 36) { Write-Host ("ROUNDTEST`n" + ($script:rlog -join "`n")); $rt.Stop(); $win.Close() }
+        if ($k -gt 200) { Write-Host 'ROUNDTEST timeout'; $rt.Stop(); $win.Close() }
+    })
+    $win.Add_ContentRendered({ $rt.Start() })
+}
+
 if ($FastTest) {
     # automated check of fast cut: start snaps to a keyframe, Q/W step by keyframes, the clip is copied; prints results, then closes
     $script:fstep = 0; $script:flog = New-Object System.Collections.ArrayList
@@ -844,4 +968,4 @@ $win.Add_Loaded({ Start-Mpv; Set-Title; Load-Video 0; $timer.Start() })
 
 # remove placeholders of slices that never finished
 foreach ($j in @($st.Jobs) + @($st.Running)) { if ($j -and $j.Kind -eq 'mp4') { try { $f = Get-Item -LiteralPath $j.Mp4 -EA Stop; if ($f.Length -eq 0) { Remove-Item -LiteralPath $j.Mp4 } } catch {} } }
-if ($st.Done.Count -and -not $SelfTest -and -not $FastTest) { Show-InFolder $st.Done[$st.Done.Count - 1] }
+if ($st.Done.Count -and -not $SelfTest -and -not $FastTest -and -not $RoundTest) { Show-InFolder $st.Done[$st.Done.Count - 1] }

@@ -34,7 +34,7 @@ To save a clip:
 3. If it's not quite right, move the start with `Q` / `W` and the end with `E` / `R`.
 4. Press `Enter` to save it. The video keeps playing, and the clip is saved in the background.
 
-Clips are saved next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** if you also want the audio as a separate file.
+Clips are saved in a `clips` folder next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** if you also want the audio as a separate file.
 
 ### Fast cut
 
@@ -64,6 +64,30 @@ All keys:
 
 You can also click the timeline to jump to a spot, or drag it. If you opened several recordings, they're listed on the right; click one to switch.
 
+### Folders and rounds
+
+**Open folder...** lists all recordings in a folder, oldest first. You can also right-click a folder and choose **Send to → FragCut**.
+
+To keep the recordings of one game round together, select them in the list (Ctrl+click or Shift+click) and click **Make round...**. FragCut asks for a short game tag, like `BF6`, and suggests the next round number. It shows the new names before anything is moved. Then it:
+
+- makes a folder for the round next to the recordings, named `BF6-12 2026-11-13` (tag, round number, date of the first recording),
+- moves the recordings into it, renamed `BF6-12-1 <original name>`, `BF6-12-2 <original name>` ... in the order they were recorded,
+- moves the clips already cut from them into the round's `clips` folder, renamed `BF6-12-1 clip 01m38-01m43.mp4`.
+
+```
+Battlefield 6\
+  BF6-12 2026-11-13\
+    BF6-12-1 Battlefield 6 2026.11.13 - 18.19.09.77.DVR.mp4
+    BF6-12-2 Battlefield 6 2026.11.13 - 18.26.22.78.DVR.mp4
+    clips\
+      BF6-12-1 clip 01m38-01m43.mp4
+      BF6-12 montage.mp4
+```
+
+Clips you cut later from those recordings get the same kind of name, and joining them gives `BF6-12 montage.mp4`. FragCut remembers the tag for each game folder and counts the rounds up from the highest one it finds.
+
+**Undo round** moves the files of the last round back to their old names and folders. Clips cut since then go back with their recording.
+
 ### Finding kills (Battlefield 6)
 
 Press `K` (or **Find kills**). FragCut looks through the recording for the tags Battlefield 6 shows when you get a kill (KILL, HEADSHOT, KILL CONFIRMED) and puts a red mark on the timeline for each one. You can keep watching while it looks; a 2-minute recording takes about 10 seconds.
@@ -76,7 +100,7 @@ It only knows Battlefield 6 for now, and the recording has to be 16:9 (1080p, 14
 
 ### Kill montage (Battlefield 6)
 
-Select one or more recordings and choose **Send to → FragCut - Kill montage**. It finds the kills in each recording, takes 5 seconds before each kill and 1 second after, and joins all of them into one video named `<first recording> - kill montage.mp4`. Nothing to click in between; it shows its progress in a small window.
+Select one or more recordings and choose **Send to → FragCut - Kill montage**. It finds the kills in each recording, takes 5 seconds before each kill and 1 second after, and joins all of them into one video named `<first recording> - kill montage.mp4` (or `BF6-12 kill montage.mp4` for a round), in the `clips` folder. Nothing to click in between; it shows its progress in a small window.
 
 Kills close together share one clip, so a double kill isn't repeated or cut short: when KILL turns into KILL x2, the clip runs until 1 second after the last kill. If some recordings are 720p and others 1440p, the clips are scaled to the bigger size. Recordings that were already searched (with `K` or an earlier montage) aren't searched again.
 
@@ -135,6 +159,7 @@ Every clip is encoded with the same settings (H.264 High profile level 5.2, AAC 
 |---|---|
 | `FragCut.ps1` | the player: watch, mark, cut |
 | `Mpv.ps1` | runs mpv inside the player window |
+| `Rounds.ps1` | Open folder, Make round and Undo round (moves and renames files, keeps a log in `%LOCALAPPDATA%\FragCut\rounds-log.json`) |
 | `Join.ps1` | join clips |
 | `TimeCut.ps1` | cut by typed times |
 | `Compress.ps1` | make a smaller copy of a video |

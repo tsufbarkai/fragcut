@@ -1,4 +1,4 @@
-# FragCut Kill montage - finds the kills in one or more recordings (Battlefield 6) and joins them into one video.
+﻿# FragCut Kill montage - finds the kills in one or more recordings (Battlefield 6) and joins them into one video.
 # Usage: select recordings in Explorer > right-click > Send to > FragCut - Kill montage  (or run with no files to pick them).
 # Each kill becomes a clip from 5 s before it to 1 s after (kills close together share one clip).
 # Test switches: -Before 5 -After 1 -NoOpen -NoPause -KeepClips
@@ -34,7 +34,7 @@ try {
         if ($dlg.ShowDialog() -ne 'OK') { exit }
         $list = @($dlg.FileNames)
     }
-    $list = @($list | Sort-Object { Split-Path $_ -Leaf })      # recording order (NVIDIA names start with the date)
+    $list = @($list | Sort-Object { Get-NaturalKey (Split-Path $_ -Leaf) })      # recording order (NVIDIA names start with the date)
 
     Write-Host "`nFragCut $FragCutVersion - Kill montage  ($Before s before each kill, $After s after)" -ForegroundColor DarkGray
 
@@ -121,8 +121,9 @@ try {
     Write-Host ("`r  {0} clips cut in {1:N0} s          " -f $clips.Count, $sw.Elapsed.TotalSeconds)
 
     # 4) join them (no re-encoding: every clip has the same format)
-    $dir  = Split-Path $list[0] -Parent
-    $name = ([IO.Path]::GetFileNameWithoutExtension($list[0]) -replace '\.DVR$', '') + ' - kill montage'
+    $dir  = Get-ClipDir $list[0]                                   # the "clips" folder next to the recording
+    [IO.Directory]::CreateDirectory($dir) | Out-Null
+    $name = Get-MontageBase $list[0] 'kill montage'                # "<recording> - kill montage", or "BF6-12 kill montage"
     $n = 1; $try = $name
     while (Test-Path -LiteralPath (Join-Path $dir "$try.mp4")) { $n++; $try = "$name ($n)" }
     $out = Join-Path $dir "$try.mp4"

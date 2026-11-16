@@ -56,7 +56,7 @@ try {
     if ($list.Count -lt 2) { Write-Host 'Pick at least 2 clips.' -ForegroundColor Yellow; Done; exit }
 
     # default order = file name, which for NVIDIA recordings is the recording date/time
-    $list = @($list | Sort-Object { Split-Path $_ -Leaf })
+    $list = @($list | Sort-Object { Get-NaturalKey (Split-Path $_ -Leaf) })
 
     Write-Host "`nFragCut $FragCutVersion - Join" -ForegroundColor DarkGray
     Write-Host 'Clips (in recording order):' -ForegroundColor Cyan
@@ -85,10 +85,9 @@ try {
     $info = @($list | ForEach-Object { Probe $ffprobe $_ })
     $same = (@($info.Key | Select-Object -Unique).Count -eq 1) -and -not (@($info | Where-Object { -not $_.HasAudio }).Count)
 
-    # output name: first clip's recording name + " - montage"
+    # output name: first clip's recording name + " - montage" (a round's clips: "BF6-12 montage"), next to the clips
     $dir  = Split-Path $list[0] -Parent
-    $base = ([IO.Path]::GetFileNameWithoutExtension($list[0]) -replace '\.DVR$', '') -replace ' - clip .*$', ''
-    $name = "$base - montage"; $n = 1; $try = $name
+    $name = Get-MontageBase $list[0]; $n = 1; $try = $name
     while (Test-Path -LiteralPath (Join-Path $dir "$try.mp4")) { $n++; $try = "$name ($n)" }
     $out = Join-Path $dir "$try.mp4"
 

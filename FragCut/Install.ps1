@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
 . (Join-Path $PSScriptRoot 'Mpv.ps1')
 
-$script:Files = 'Core.ps1','Mpv.ps1','FragCut.ps1','Join.ps1','Join.bat','TimeCut.ps1','TimeCut.bat','Compress.ps1','Compress.bat','Kills.ps1','KillScan.ps1','KillMontage.ps1','KillMontage.bat','Uninstall.ps1','Uninstall.bat','Quick Guide.txt'
+$script:Files = 'Core.ps1','Mpv.ps1','Rounds.ps1','FragCut.ps1','Join.ps1','Join.bat','TimeCut.ps1','TimeCut.bat','Compress.ps1','Compress.bat','Kills.ps1','KillScan.ps1','KillMontage.ps1','KillMontage.bat','Uninstall.ps1','Uninstall.bat','Quick Guide.txt'
 
 function Copy-FragCut {
     New-Item -ItemType Directory -Force $Dest | Out-Null

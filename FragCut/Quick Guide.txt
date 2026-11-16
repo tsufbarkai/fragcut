@@ -49,7 +49,18 @@ Slices save in the background (next to the recording) while you keep watching.
      before your mark (usually 0.5-2 s), and Q / W move the start by one keyframe. The clip keeps the
      recording's format (AV1 / HEVC clips don't play everywhere).
   The orange bar above the timeline shows the marked part.
-  Slices are named like:  <recording> - clip 01m38-01m43.mp4
+  Slices are saved in a "clips" folder next to the recording, named like:  <recording> - clip 01m38-01m43.mp4
+
+
+FOLDERS AND ROUNDS
+------------------
+"Open folder..." lists all recordings in a folder, oldest first (or right-click a folder > Send to > FragCut).
+To keep one game round together: select its recordings in the list (Ctrl+click / Shift+click) > "Make round...".
+Type a short game tag (BF6, APEX ...); FragCut suggests the next round number and shows the new names first.
+  BF6-12 2026-11-13\                       the round's folder (tag, round number, date)
+    BF6-12-1 <original name>.mp4           recordings, numbered in the order they were recorded
+    clips\BF6-12-1 clip 01m38-01m43.mp4    clips cut from them (also the ones cut before)
+Joining a round's clips gives "BF6-12 montage.mp4". "Undo round" moves the last round's files back.
 
 
 FIND KILLS - Battlefield 6

@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.7.0
+
+- **Clips go into a `clips` folder** next to the recording, instead of next to the recording itself.
+  Kill montages too. Join saves the montage next to the clips, as before.
+- **Open folder**: lists every recording in a folder (and in its round folders), oldest first. You can also choose
+  *Send to > FragCut* on a folder.
+- **Rounds**: select recordings in the list (Ctrl+click or Shift+click) and click **Make round**. FragCut asks for a
+  short game tag (like `BF6`) and suggests the next round number. It moves the recordings into a folder of their own,
+  `BF6-12 2026-11-13`, renamed `BF6-12-1 <original name>`, `BF6-12-2 ...` in the order they were recorded.
+  Clips already cut from them move into the round's `clips` folder and are renamed `BF6-12-1 clip 01m38-01m43.mp4`.
+  New clips of a round's recordings are named the same way, and joining them gives `BF6-12 montage.mp4`.
+  FragCut remembers the tag for each game folder and counts the rounds up.
+- **Undo round** moves the files of the last round back to their old names and folders. Clips cut since then go
+  back with their recording.
+- Kill search results carry over when a recording is renamed.
+
 ## 1.6.0
 
 - **Fast cut (no re-encode)**: a checkbox in FragCut. When it's on, clips are copied from the recording instead of

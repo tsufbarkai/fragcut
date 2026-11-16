@@ -1,7 +1,7 @@
 ﻿# FragCut - shared helpers (dot-sourced by FragCut.ps1, Join.ps1, TimeCut.ps1, Compress.ps1 and KillScan.ps1).
 # https://github.com/tsufbarkai/fragcut
 
-$FragCutVersion = '1.6.0'
+$FragCutVersion = '1.7.0'
 $script:Inv = [Globalization.CultureInfo]::InvariantCulture
 $script:SettingsFile = Join-Path $env:LOCALAPPDATA 'FragCut\settings.json'
 
@@ -162,11 +162,47 @@ function Get-EncoderName([string]$enc) {
     switch ($enc) { 'h264_nvenc' { 'NVIDIA GPU' } 'h264_amf' { 'AMD GPU' } 'h264_qsv' { 'Intel GPU' } default { 'CPU' } }
 }
 
-# Output paths for a slice: "<name> - clip 01m38-01m43.mp4" (+ .mp3). Adds " (2)" etc. if it already exists.
+# ---------- names and folders ----------
+# Recordings grouped as a round (see Rounds.ps1) are named "<tag>-<round>-<order> <original name>", e.g. "BF6-12-1 Battlefield 6 ...".
+$script:RoundRx = '^(?<tag>[A-Za-z0-9_]+)-(?<n>\d+)-(?<k>\d+) (?<rest>.+)$'
+function Get-RoundParts($video) {
+    $leaf = Split-Path $video -Leaf
+    if ($leaf -match $script:RoundRx) { return @{ Tag = $Matches.tag; N = [int]$Matches.n; K = [int]$Matches.k; Rest = $Matches.rest } }
+    return $null
+}
+
+# The game's folder: the recording's folder, or the one above it if the recording is already in a round folder
+function Get-GameDir($video) {
+    $dir = Split-Path $video -Parent
+    $p = Get-RoundParts $video
+    if ($p -and (Split-Path $dir -Leaf) -match "^$([regex]::Escape($p.Tag))-$($p.N)( |$)") { return (Split-Path $dir -Parent) }
+    return $dir
+}
+
+# Where clips of a recording go, and how they're named
+function Get-ClipDir($video) { return (Join-Path (Split-Path $video -Parent) 'clips') }
+function Get-ClipBase($video) {
+    $p = Get-RoundParts $video
+    if ($p) { return "$($p.Tag)-$($p.N)-$($p.K) clip" }
+    return (([IO.Path]::GetFileNameWithoutExtension($video) -replace '\.DVR$', '') + ' - clip')
+}
+
+# Sort key that puts "2" before "10"
+function Get-NaturalKey([string]$s) { return [regex]::Replace($s.ToLowerInvariant(), '\d+', { param($m) $m.Value.PadLeft(12, '0') }) }
+
+# Montage name from the first clip: "BF6-12 montage" for a round's clips, else "<recording> - montage"
+function Get-MontageBase($firstClip, [string]$what = 'montage') {
+    $b = [IO.Path]::GetFileNameWithoutExtension($firstClip) -replace '\.DVR$', ''
+    if ($b -match '^(?<r>[A-Za-z0-9_]+-\d+)-\d+( clip .*)?$' -or $b -match '^(?<r>[A-Za-z0-9_]+-\d+)-\d+ ') { return "$($Matches.r) $what" }
+    return (($b -replace ' - clip .*$', '') + " - $what")
+}
+
+# Output paths for a slice, in a "clips" folder next to the recording: "<recording> - clip 01m38-01m43.mp4"
+# (or "BF6-12-1 clip 01m38-01m43.mp4" in a round), + .mp3. Adds " (2)" etc. if it already exists.
 function Get-SlicePaths($video, [double]$start, [double]$end) {
-    $dir  = Split-Path $video -Parent
-    $base = [IO.Path]::GetFileNameWithoutExtension($video) -replace '\.DVR$', ''
-    $name = "$base - clip $(Label $start)-$(Label $end)"
+    $dir  = Get-ClipDir $video
+    [IO.Directory]::CreateDirectory($dir) | Out-Null
+    $name = "$(Get-ClipBase $video) $(Label $start)-$(Label $end)"
     $n = 1; $try = $name
     while (Test-Path -LiteralPath (Join-Path $dir "$try.mp4")) { $n++; $try = "$name ($n)" }
     return @{ Mp4 = (Join-Path $dir "$try.mp4"); Mp3 = (Join-Path $dir "$try.mp3") }
