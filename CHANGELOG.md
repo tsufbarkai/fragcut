@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.7.1
+
+- **Drag the start and end with the mouse**: the orange bar above the timeline has a handle at each end. Drag the
+  left one to move the start, the right one to move the end. The video shows the frame under the handle while you
+  drag, and when you let go the loop plays from that edge. With only a start marked, the start can be dragged too.
+  With fast cut on, the start moves to keyframes.
+
 ## 1.7.0
 
 - **Clips go into a `clips` folder** next to the recording, instead of next to the recording itself.

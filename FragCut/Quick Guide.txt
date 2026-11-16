@@ -48,7 +48,7 @@ Slices save in the background (next to the recording) while you keep watching.
      original quality and size. It can only start on a keyframe, so the start moves back to the last one
      before your mark (usually 0.5-2 s), and Q / W move the start by one keyframe. The clip keeps the
      recording's format (AV1 / HEVC clips don't play everywhere).
-  The orange bar above the timeline shows the marked part.
+  The orange bar above the timeline shows the marked part. Drag its left / right end to move the start / end.
   Slices are saved in a "clips" folder next to the recording, named like:  <recording> - clip 01m38-01m43.mp4
 
 

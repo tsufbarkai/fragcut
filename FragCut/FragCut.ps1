@@ -12,7 +12,7 @@
 # Slices are saved next to the recording. All slices use the same encoder settings,
 # so Join stitches them without re-encoding.
 
-param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest, [switch]$RoundTest)
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Files, [switch]$SelfTest, [switch]$KillTest, [switch]$PreviewTest, [switch]$FastTest, [switch]$RoundTest, [switch]$GripTest)
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Core.ps1')
@@ -72,8 +72,10 @@ if ($queue.Count -eq 0) { exit }
     <Border x:Name="VideoBox" Grid.Row="1" Background="Black">
       <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop" ScrubbingEnabled="True" Stretch="Uniform"/>
     </Border>
-    <Canvas x:Name="RangeCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0">
-      <Rectangle x:Name="RangeRect" Height="8" Fill="#f0a020" Width="0"/>
+    <Canvas x:Name="RangeCanvas" Grid.Row="2" Height="14" Margin="5,7,5,-3" Background="Transparent">
+      <Rectangle x:Name="RangeRect" Canvas.Top="3" Height="8" Fill="#f0a020" Width="0"/>
+      <Rectangle x:Name="StartGrip" Width="4" Height="14" Fill="#ffe2a8" Visibility="Collapsed"/>
+      <Rectangle x:Name="EndGrip" Width="4" Height="14" Fill="#ffe2a8" Visibility="Collapsed"/>
     </Canvas>
     <Canvas x:Name="KillCanvas" Grid.Row="2" Height="8" Margin="5,10,5,0" IsHitTestVisible="False"/>
     <Slider x:Name="Seek" Grid.Row="3" Minimum="0" Maximum="1" Focusable="False" Margin="0,2,0,0" Cursor="Hand"/>
@@ -119,7 +121,7 @@ if ($queue.Count -eq 0) { exit }
 
 $win = [Windows.Markup.XamlReader]::Load((New-Object System.Xml.XmlNodeReader $xaml))
 $ui = @{}
-foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','ChkFast','Slices','Videos','BtnPrev','BtnNext','BtnOpen','BtnFolder','BtnRound','BtnUndo') { $ui[$n] = $win.FindName($n) }
+foreach ($n in 'TitleText','Player','VideoBox','RangeCanvas','RangeRect','StartGrip','EndGrip','KillCanvas','Seek','TimeText','MarkText','Vol','BtnPlay','BtnStart','BtnEnd','BtnClear','BtnCut','BtnJoin','BtnKills','ChkMp3','ChkFast','Slices','Videos','BtnPrev','BtnNext','BtnOpen','BtnFolder','BtnRound','BtnUndo') { $ui[$n] = $win.FindName($n) }
 
 $st = @{
     Index = -1; Video = $null; Dur = 0.0; Playing = $false
@@ -137,6 +139,7 @@ $st = @{
     KillLasts = $null                                  # per kill moment: time of its last kill (KILL x2 ...)
     KillIx = -1; KillClip = $null                      # last kill jumped to, and the part marked for it
     PendingSeek = $null; PendingPlay = $true           # after files were moved: where to continue
+    Grip = $null; GripWasPlaying = $false; GripFrom = 0.0              # dragging the start or end of the marked part
 }
 
 function Set-Status($i, $text) { $ui.Slices.Items[$i] = $text }
@@ -351,7 +354,12 @@ function Update-Marks {
         $a = $st.Start; $b = if ($null -ne $st.End -and $st.End -gt $a) { $st.End } else { [math]::Max((Pos), $a) }
         [Windows.Controls.Canvas]::SetLeft($ui.RangeRect, $w * $a / $st.Dur)
         $ui.RangeRect.Width = [math]::Max(2.0, $w * ($b - $a) / $st.Dur)
-    } else { $ui.RangeRect.Width = 0 }
+        # grips on the edges: drag them to move the start / end
+        [Windows.Controls.Canvas]::SetLeft($ui.StartGrip, $w * $a / $st.Dur - 2)
+        $ui.StartGrip.Visibility = 'Visible'
+        [Windows.Controls.Canvas]::SetLeft($ui.EndGrip, $w * $b / $st.Dur - 2)
+        $ui.EndGrip.Visibility = if (Looping) { 'Visible' } else { 'Collapsed' }
+    } else { $ui.RangeRect.Width = 0; $ui.StartGrip.Visibility = 'Collapsed'; $ui.EndGrip.Visibility = 'Collapsed' }
 }
 
 function Start-Loop { Seek-To $st.Start; Play; Update-Marks }
@@ -693,6 +701,62 @@ function End-Drag {
 $ui.Seek.Add_PreviewMouseLeftButtonUp({ param($s, $e) $e.Handled = $true; if ($st.Dragging) { Seek-To (Track-Value $e) }; $ui.Seek.ReleaseMouseCapture(); End-Drag })
 $ui.Seek.Add_LostMouseCapture({ End-Drag })
 
+# ---------- dragging the start / end of the marked part (the orange bar's edges) ----------
+# Which edge is under the mouse (within 7 px): 'start', 'end' (only once an end is marked) or $null
+function Grip-At([double]$x) {
+    $w = $ui.RangeCanvas.ActualWidth
+    if ($st.Dur -le 0 -or $w -le 0 -or $null -eq $st.Start) { return $null }
+    $da = [math]::Abs($x - $w * $st.Start / $st.Dur)
+    $de = if (Looping) { [math]::Abs($x - $w * $st.End / $st.Dur) } else { 1e9 }
+    if ([math]::Min($da, $de) -gt 7) { return $null }
+    if ($de -lt $da) { return 'end' } else { return 'start' }
+}
+function Grip-Time($e) {
+    $w = [math]::Max(1.0, $ui.RangeCanvas.ActualWidth)
+    return $st.Dur * [math]::Max(0.0, [math]::Min(1.0, $e.GetPosition($ui.RangeCanvas).X / $w))
+}
+# Moves the edge being dragged to $t and shows that frame
+function Move-Grip([double]$t) {
+    if ($st.Grip -eq 'start') {
+        $max = if (Looping) { $st.End - 0.1 } else { [math]::Max(0.0, $st.Dur - 0.1) }
+        $st.Start = Snap-Start ([math]::Max(0.0, [math]::Min($t, $max)))
+        $show = $st.Start
+    } else {
+        $st.End = [math]::Min($st.Dur, [math]::Max($t, $st.Start + 0.1))
+        $show = $st.End
+    }
+    P-SetPos $show -Fast
+    $ui.Seek.Value = $show; $st.LastSeek = $show; $st.LastSeekAt = [datetime]::Now
+    Update-Marks
+}
+function End-Grip {
+    if (-not $st.Grip) { return }
+    $g = $st.Grip; $st.Grip = $null
+    P-Mute $false
+    if (Looping) {
+        if ($g -eq 'start') { Seek-To $st.Start } else { Seek-To ([math]::Max($st.Start, $st.End - 1.5)) }   # replay that edge
+        Play
+    } else { Seek-To ([math]::Max($st.Start, $st.GripFrom)); if ($st.GripWasPlaying) { Play } }   # only a start: back to where the end was
+    Update-Marks
+}
+$ui.RangeCanvas.Add_MouseLeftButtonDown({
+    param($s, $e)
+    $g = Grip-At ($e.GetPosition($ui.RangeCanvas).X)
+    if (-not $g) { return }
+    $e.Handled = $true
+    $st.Grip = $g; $st.GripWasPlaying = $st.Playing; $st.GripFrom = Base-Pos
+    if ($st.Playing) { Pause-Video }
+    P-Mute $true
+    [void]$ui.RangeCanvas.CaptureMouse()
+})
+$ui.RangeCanvas.Add_MouseMove({
+    param($s, $e)
+    if ($st.Grip) { $e.Handled = $true; Move-Grip (Grip-Time $e); return }
+    $ui.RangeCanvas.Cursor = if (Grip-At ($e.GetPosition($ui.RangeCanvas).X)) { [Windows.Input.Cursors]::SizeWE } else { $null }
+})
+$ui.RangeCanvas.Add_MouseLeftButtonUp({ param($s, $e) if ($st.Grip) { $e.Handled = $true; Move-Grip (Grip-Time $e); $ui.RangeCanvas.ReleaseMouseCapture(); End-Grip } })
+$ui.RangeCanvas.Add_LostMouseCapture({ End-Grip })
+
 # ---------- events ----------
 function On-MediaOpened {
     # Windows' player rounds the length down to whole seconds; ffprobe gives the exact length
@@ -887,6 +951,34 @@ if ($RoundTest) {
     $win.Add_ContentRendered({ $rt.Start() })
 }
 
+if ($GripTest) {
+    # automated check of dragging the marked part's edges (the mouse handlers call these same functions)
+    $script:gstep = 0; $script:glog = New-Object System.Collections.ArrayList
+    $gt = New-Object Windows.Threading.DispatcherTimer
+    $gt.Interval = [TimeSpan]::FromMilliseconds(250)
+    $gt.Add_Tick({
+        $script:gstep++; $k = $script:gstep
+        function L($m) { [void]$script:glog.Add($m) }
+        function Px([double]$t) { $ui.RangeCanvas.ActualWidth * $t / $st.Dur }
+        switch ($k) {
+            6  { Seek-To 2.0; Mark-Start; Seek-To 6.0; Mark-End; L ("  marked {0:N2}-{1:N2}, grips visible: start {2} end {3}" -f $st.Start, $st.End, $ui.StartGrip.Visibility, $ui.EndGrip.Visibility) }
+            8  { L ("  hit test: at start {0}, 5 px right of start {1}, at end {2}, middle {3}" -f (Grip-At (Px 2.0)), (Grip-At ((Px 2.0) + 5)), (Grip-At (Px 6.0)), (Grip-At (Px 4.0)))
+                 $st.Grip = 'start'; $st.GripWasPlaying = $st.Playing; $st.GripFrom = Base-Pos; Pause-Video; Move-Grip 3.3; Move-Grip 1.25; End-Grip
+                 L ("  dragged start to 1.25: {0:N2}-{1:N2}, playing {2}, pos {3:N2}" -f $st.Start, $st.End, $st.Playing, $st.LastSeek) }
+            12 { $st.Grip = 'end'; $st.GripWasPlaying = $st.Playing; $st.GripFrom = Base-Pos; Pause-Video; Move-Grip 0.5; End-Grip
+                 L ("  dragged end before the start: {0:N2}-{1:N2} (end stays 0.1 s after start)" -f $st.Start, $st.End) }
+            16 { $st.Grip = 'end'; Pause-Video; Move-Grip 8.4; End-Grip; L ("  dragged end to 8.4: {0:N2}-{1:N2}, replay from {2:N2}" -f $st.Start, $st.End, $st.LastSeek) }
+            20 { Clear-Marks; Seek-To 3.0; Mark-Start; Seek-To 7.0; L ("  only a start at {0:N2}: end grip {1}, hit at 7.0 = {2}" -f $st.Start, $ui.EndGrip.Visibility, (Grip-At (Px 7.0)))
+                 $st.Grip = 'start'; $st.GripWasPlaying = $st.Playing; $st.GripFrom = Base-Pos; Pause-Video; Move-Grip 1.5; End-Grip
+                 L ("  dragged start to 1.5: start {0:N2}, back at {1:N2}" -f $st.Start, $st.LastSeek) }
+            22 { $ui.ChkFast.IsChecked = $true; Seek-To 6.0; Mark-End; $st.Grip = 'start'; Pause-Video; Move-Grip 2.6; End-Grip
+                 L ("  fast cut on, dragged start to 2.6: start {0:N2} (keyframe)" -f $st.Start); $ui.ChkFast.IsChecked = $false }
+        }
+        if ($k -gt 24) { Write-Host ("GRIPTEST`n" + ($script:glog -join "`n")); $gt.Stop(); $win.Close() }
+    })
+    $win.Add_ContentRendered({ $gt.Start() })
+}
+
 if ($FastTest) {
     # automated check of fast cut: start snaps to a keyframe, Q/W step by keyframes, the clip is copied; prints results, then closes
     $script:fstep = 0; $script:flog = New-Object System.Collections.ArrayList
@@ -968,4 +1060,4 @@ $win.Add_Loaded({ Start-Mpv; Set-Title; Load-Video 0; $timer.Start() })
 
 # remove placeholders of slices that never finished
 foreach ($j in @($st.Jobs) + @($st.Running)) { if ($j -and $j.Kind -eq 'mp4') { try { $f = Get-Item -LiteralPath $j.Mp4 -EA Stop; if ($f.Length -eq 0) { Remove-Item -LiteralPath $j.Mp4 } } catch {} } }
-if ($st.Done.Count -and -not $SelfTest -and -not $FastTest -and -not $RoundTest) { Show-InFolder $st.Done[$st.Done.Count - 1] }
+if ($st.Done.Count -and -not $SelfTest -and -not $FastTest -and -not $RoundTest -and -not $GripTest) { Show-InFolder $st.Done[$st.Done.Count - 1] }

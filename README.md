@@ -31,7 +31,7 @@ To save a clip:
 
 1. Press `I` where the clip should start.
 2. Press `O` where it should end. That part now plays on repeat, so you can check it.
-3. If it's not quite right, move the start with `Q` / `W` and the end with `E` / `R`.
+3. If it's not quite right, move the start with `Q` / `W` and the end with `E` / `R`, or drag the ends of the orange bar above the timeline.
 4. Press `Enter` to save it. The video keeps playing, and the clip is saved in the background.
 
 Clips are saved in a `clips` folder next to the recording, named like `<recording> - clip 01m38-01m43.mp4`. Tick **Also save MP3** if you also want the audio as a separate file.
@@ -62,7 +62,7 @@ All keys:
 | `↑` / `↓` | playback speed (0.25x to 4x) |
 | `+` / `-` | volume |
 
-You can also click the timeline to jump to a spot, or drag it. If you opened several recordings, they're listed on the right; click one to switch.
+You can also click the timeline to jump to a spot, or drag it. The orange bar above it shows the marked part; drag its left or right end to move the start or end. If you opened several recordings, they're listed on the right; click one to switch.
 
 ### Folders and rounds
 
